@@ -1,17 +1,39 @@
 import { mockAnalysisResult } from '../../mocks/analysis.mock'
 import { AiWorkflowStepError, analyzeMatch } from '../services/aiWorkflow'
 import {
+  createFallbackMetrics,
+  logChainMetrics,
+  type ChainErrorStage,
+} from '../utils/chainMetrics'
+import {
   AiJsonParseError,
   createAiJsonErrorData,
   getErrorMessage,
   parseJsonInput,
 } from '../utils/json'
+import { SchemaValidationError } from '../utils/schemaValidation'
 import type { AnalysisResult, JobProfile, ResumeProfile } from '../../types/analysis'
 
 interface AnalyzeMatchRequestBody {
   resumeJson?: unknown
   jobJson?: unknown
   roleType?: string
+}
+
+const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
+  if (!(error instanceof AiWorkflowStepError)) {
+    return undefined
+  }
+
+  if (error.sourceError instanceof AiJsonParseError) {
+    return 'parse'
+  }
+
+  if (error.sourceError instanceof SchemaValidationError) {
+    return 'validate'
+  }
+
+  return 'llm'
 }
 
 export default defineEventHandler(async (event): Promise<AnalysisResult> => {
@@ -51,6 +73,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
         step: error.step,
         ...createAiJsonErrorData(error.sourceError),
       })
+      logChainMetrics(createFallbackMetrics('analysis_match', 'parse'))
 
       return {
         ...mockAnalysisResult,
@@ -61,6 +84,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     console.warn(
       `[ai_workflow] fallback used after analyze_match failure: ${getErrorMessage(error, 'Analyze match failed')}`,
     )
+    logChainMetrics(createFallbackMetrics('analysis_match', getFallbackErrorStage(error)))
 
     return {
       ...mockAnalysisResult,

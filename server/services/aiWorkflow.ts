@@ -1,9 +1,9 @@
-import { runAnalyzeMatchChain } from '../chains/analyzeMatchChain'
-import { runJobExtractChain, type MinimalJobExtract } from '../chains/jobExtractChain'
+import { analysisMatchChain } from '../chains/analyzeMatchChain'
+import { jobExtractChain, type JobExtractChainOutput, type JobJson } from '../chains/jobExtractChain'
 import {
-  runResumeExtractChain,
-  type MinimalResumeExtract,
-  type MinimalSeniorityLevel,
+  resumeExtractChain,
+  type ResumeExtractChainOutput,
+  type ResumeJson,
 } from '../chains/resumeExtractChain'
 import { getErrorMessage } from '../utils/json'
 import type {
@@ -16,6 +16,33 @@ import type {
 } from '../../types/analysis'
 
 export type AiWorkflowStep = 'resume_extract' | 'job_extract' | 'analysis_match'
+export type AnalysisWorkflowStage = 'resume' | 'job' | 'analysis'
+
+export interface AnalysisWorkflowInput {
+  resumeText: string
+  jobText: string
+  roleType?: string
+}
+
+export interface AnalysisWorkflowMetrics {
+  totalDuration: number
+}
+
+export type AnalysisWorkflowResult =
+  | {
+      success: true
+      data: {
+        resume: ResumeProfile
+        job: JobProfile
+        analysis: Omit<AnalysisResult, 'resume' | 'job'>
+      }
+      metrics: AnalysisWorkflowMetrics
+    }
+  | {
+      success: false
+      error: string
+      stage: AnalysisWorkflowStage
+    }
 
 export class AiWorkflowStepError extends Error {
   constructor(
@@ -33,7 +60,7 @@ const normalizeStringList = (value: string[] | undefined, limit: number): string
     .filter(Boolean)
     .slice(0, limit)
 
-const normalizeSeniorityLevel = (value: MinimalSeniorityLevel | undefined): SeniorityLevel =>
+const normalizeSeniorityLevel = (value: SeniorityLevel | undefined): SeniorityLevel =>
   value ?? 'unknown'
 
 const inferSkillCategory = (name: string): SkillCategory => {
@@ -64,7 +91,7 @@ const createSkillItems = (skills: string[] | undefined, limit: number): SkillIte
     category: inferSkillCategory(name),
   }))
 
-const normalizeResumeProfile = (resume: MinimalResumeExtract): ResumeProfile => ({
+const normalizeResumeProfile = (resume: ResumeJson): ResumeProfile => ({
   name: resume.name ?? '',
   headline: resume.headline ?? '',
   summary: resume.summary ?? '',
@@ -84,7 +111,7 @@ const normalizeResumeProfile = (resume: MinimalResumeExtract): ResumeProfile => 
   })),
 })
 
-const normalizeJobProfile = (job: MinimalJobExtract): JobProfile => ({
+const normalizeJobProfile = (job: JobJson): JobProfile => ({
   title: job.title ?? '',
   company: job.company ?? '',
   seniorityLevel: normalizeSeniorityLevel(job.seniorityLevel),
@@ -95,26 +122,6 @@ const normalizeJobProfile = (job: MinimalJobExtract): JobProfile => ({
   requiredYearsOfExperience: job.requiredYearsOfExperience ?? 0,
   educationRequirements: normalizeStringList(job.educationRequirements, 2),
   keywords: normalizeStringList(job.keywords, 10),
-})
-
-const createAnalysisInput = (resume: ResumeProfile, job: JobProfile) => ({
-  resume: {
-    summary: resume.summary ?? '',
-    yearsOfExperience: resume.yearsOfExperience ?? 0,
-    skills: resume.skills.map((skill) => skill.name).filter(Boolean).slice(0, 8),
-    projects: resume.projects.slice(0, 2).map((project) => ({
-      name: project.name,
-      summary: project.summary,
-      skills: project.skills.slice(0, 5),
-    })),
-  },
-  job: {
-    title: job.title,
-    summary: job.summary ?? '',
-    requiredSkills: job.requiredSkills.map((skill) => skill.name).filter(Boolean).slice(0, 8),
-    preferredSkills: job.preferredSkills?.map((skill) => skill.name).filter(Boolean).slice(0, 5) ?? [],
-    keywords: job.keywords.slice(0, 10),
-  },
 })
 
 const logStepStart = (step: AiWorkflowStep) => {
@@ -129,6 +136,119 @@ const logStepFail = (step: AiWorkflowStep, error: unknown) => {
   console.error(`[ai_workflow] ${step} fail: ${getErrorMessage(error)}`)
 }
 
+const toWorkflowStep = (stage: AnalysisWorkflowStage): AiWorkflowStep => {
+  if (stage === 'resume') {
+    return 'resume_extract'
+  }
+
+  if (stage === 'job') {
+    return 'job_extract'
+  }
+
+  return 'analysis_match'
+}
+
+const createStepError = (
+  stage: AnalysisWorkflowStage,
+  sourceError: unknown,
+): AiWorkflowStepError =>
+  new AiWorkflowStepError(toWorkflowStep(stage), `${stage} workflow stage failed`, sourceError)
+
+export async function runAnalysisWorkflow(
+  input: AnalysisWorkflowInput,
+): Promise<AnalysisWorkflowResult> {
+  const workflowStartTime = Date.now()
+  const roleType = input.roleType?.trim() || 'unknown'
+  let failedStage: AnalysisWorkflowStage = 'resume'
+
+  console.log('[Workflow] start')
+
+  try {
+    let resumeJson: ResumeExtractChainOutput
+    let resume: ResumeProfile
+
+    try {
+      failedStage = 'resume'
+      resumeJson = await resumeExtractChain.invoke({
+        resumeText: input.resumeText,
+        roleType,
+      })
+      resume = normalizeResumeProfile(resumeJson)
+      console.log('[Workflow] resume_extract done')
+    } catch (error: unknown) {
+      console.error('[Workflow] resume_extract failed', getErrorMessage(error))
+      return {
+        success: false,
+        error: getErrorMessage(error, 'Resume workflow stage failed'),
+        stage: failedStage,
+      }
+    }
+
+    let jobJson: JobExtractChainOutput
+    let job: JobProfile
+
+    try {
+      failedStage = 'job'
+      jobJson = await jobExtractChain.invoke({
+        jobText: input.jobText,
+        roleType,
+      })
+      job = normalizeJobProfile(jobJson)
+      console.log('[Workflow] job_extract done')
+    } catch (error: unknown) {
+      console.error('[Workflow] job_extract failed', getErrorMessage(error))
+      return {
+        success: false,
+        error: getErrorMessage(error, 'Job workflow stage failed'),
+        stage: failedStage,
+      }
+    }
+
+    try {
+      failedStage = 'analysis'
+      const analysis = await analysisMatchChain.invoke({
+        resumeJson: resume,
+        jobJson: job,
+        roleType,
+      })
+      console.log('[Workflow] analysis_match done')
+
+      const totalDuration = Date.now() - workflowStartTime
+
+      return {
+        success: true,
+        data: {
+          resume,
+          job,
+          analysis,
+        },
+        metrics: {
+          totalDuration,
+        },
+      }
+    } catch (error: unknown) {
+      console.error('[Workflow] analysis_match failed', getErrorMessage(error))
+      return {
+        success: false,
+        error: getErrorMessage(error, 'Analysis workflow stage failed'),
+        stage: failedStage,
+      }
+    }
+  } catch (error: unknown) {
+    console.error('[Workflow] failed', getErrorMessage(error))
+    return {
+      success: false,
+      error: getErrorMessage(error, 'Analysis workflow failed'),
+      stage: failedStage,
+    }
+  } finally {
+    const totalDuration = Date.now() - workflowStartTime
+    console.log('[Workflow Metrics]', {
+      totalDuration,
+    })
+  }
+}
+
 export const extractResumeProfile = async (
   resumeText: string,
   roleType: string,
@@ -136,7 +256,7 @@ export const extractResumeProfile = async (
   logStepStart('resume_extract')
 
   try {
-    const resume = await runResumeExtractChain({ resumeText, roleType })
+    const resume = await resumeExtractChain.invoke({ resumeText, roleType })
 
     const normalizedResume = normalizeResumeProfile(resume)
     logStepSuccess('resume_extract')
@@ -155,7 +275,7 @@ export const extractJobProfile = async (
   logStepStart('job_extract')
 
   try {
-    const job = await runJobExtractChain({ jobText, roleType })
+    const job = await jobExtractChain.invoke({ jobText, roleType })
 
     const normalizedJob = normalizeJobProfile(job)
     logStepSuccess('job_extract')
@@ -175,9 +295,9 @@ export const analyzeMatch = async (
   logStepStart('analysis_match')
 
   try {
-    const analysisInput = createAnalysisInput(resume, job)
-    const analysis = await runAnalyzeMatchChain({
-      analysisInput: JSON.stringify(analysisInput),
+    const analysis = await analysisMatchChain.invoke({
+      resumeJson: resume,
+      jobJson: job,
       roleType,
     })
 
@@ -200,8 +320,19 @@ export const runFullAnalysis = async (
   jobText: string,
   roleType: string,
 ): Promise<AnalysisResult> => {
-  const resume = await extractResumeProfile(resumeText, roleType)
-  const job = await extractJobProfile(jobText, roleType)
+  const workflowResult = await runAnalysisWorkflow({
+    resumeText,
+    jobText,
+    roleType,
+  })
 
-  return analyzeMatch(resume, job, roleType)
+  if (!workflowResult.success) {
+    throw createStepError(workflowResult.stage, new Error(workflowResult.error))
+  }
+
+  return {
+    resume: workflowResult.data.resume,
+    job: workflowResult.data.job,
+    ...workflowResult.data.analysis,
+  }
 }
