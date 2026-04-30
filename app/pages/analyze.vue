@@ -7,7 +7,8 @@ interface AnalyzeRequestBody {
   resumeText?: string
   resumeFile?: {
     name: string
-    type: 'txt' | 'pdf' | 'docx'
+    type: 'txt' | 'pdf' | 'docx' | 'image'
+    mimeType: string
     bytes: number[]
   }
   jobText: string
@@ -97,7 +98,7 @@ const readResumeFileBytes = async (file: File) => {
   return Array.from(new Uint8Array(arrayBuffer))
 }
 
-const getResumeFileType = (file: File): 'txt' | 'pdf' | 'docx' => {
+const getResumeFileType = (file: File): 'txt' | 'pdf' | 'docx' | 'image' => {
   const fileName = file.name.toLowerCase()
 
   if (fileName.endsWith('.pdf')) {
@@ -106,6 +107,15 @@ const getResumeFileType = (file: File): 'txt' | 'pdf' | 'docx' => {
 
   if (fileName.endsWith('.docx')) {
     return 'docx'
+  }
+
+  if (
+    fileName.endsWith('.jpg')
+    || fileName.endsWith('.jpeg')
+    || fileName.endsWith('.png')
+    || fileName.endsWith('.webp')
+  ) {
+    return 'image'
   }
 
   return 'txt'
@@ -132,6 +142,7 @@ const handleAnalyze = async () => {
       requestBody.resumeFile = {
         name: selectedResumeFile.name,
         type: getResumeFileType(selectedResumeFile),
+        mimeType: selectedResumeFile.type,
         bytes: await readResumeFileBytes(selectedResumeFile),
       }
     } else {
@@ -192,7 +203,7 @@ const handleAnalyze = async () => {
         />
         <input
           type="file"
-          accept=".pdf,.txt,.docx"
+          accept=".pdf,.txt,.docx,.jpg,.jpeg,.png,.webp"
           class="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
           @change="handleResumeFileChange"
         >

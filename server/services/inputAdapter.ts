@@ -7,6 +7,7 @@ import {
 import {
   extractResumeSections,
 } from './resumeSectionExtractor'
+import { extractTextFromImage } from './ocrService'
 
 const maxResumeTextLength = 2000
 const minCompactResumeRatio = 0.3
@@ -17,6 +18,7 @@ type ResumeSectionBlock = {
 }
 
 type Buffer = {
+  byteLength: number
   toString(encoding: 'utf-8'): string
   toUint8Array: () => Uint8Array
   toArrayBuffer: () => ArrayBuffer
@@ -27,10 +29,11 @@ export type ResumeInput =
   | { type: 'txt'; fileBuffer: Buffer }
   | { type: 'pdf'; fileBuffer: Buffer }
   | { type: 'docx'; fileBuffer: Buffer }
+  | { type: 'image'; fileBuffer: Buffer; mimeType: string }
 
 export interface NormalizedResumeInput {
   resumeText: string
-  source: 'text' | 'txt' | 'pdf' | 'docx'
+  source: 'text' | 'txt' | 'pdf' | 'docx' | 'image'
 }
 
 const formatResumeSection = ({ label, content }: ResumeSectionBlock) =>
@@ -177,6 +180,17 @@ export const normalizeResumeInput = async (
     } catch (error) {
       console.warn('[input] docx parse fail', error)
       throw new Error('DOCX resume input could not be parsed')
+    }
+  }
+
+  if (input.type === 'image') {
+    try {
+      const text = await extractTextFromImage(input.fileBuffer, input.mimeType)
+      const normalizedInput = normalizeResumeText(text, 'image')
+
+      return normalizedInput
+    } catch (error) {
+      throw new Error('Image resume input could not be recognized')
     }
   }
 

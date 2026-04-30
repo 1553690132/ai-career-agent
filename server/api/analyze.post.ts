@@ -15,7 +15,8 @@ interface AnalyzeRequestBody {
   resumeText?: string
   resumeFile?: {
     name?: string
-    type?: 'txt' | 'pdf' | 'docx'
+    type?: 'txt' | 'pdf' | 'docx' | 'image'
+    mimeType?: string
     bytes?: number[]
   }
   jobText?: string
@@ -24,6 +25,7 @@ interface AnalyzeRequestBody {
 
 const minTextLength = 50
 const maxTextLength = 2000
+const imageMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
 
 const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
   if (!(error instanceof AiWorkflowStepError)) {
@@ -49,6 +51,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const resumeFileBytes = body.resumeFile?.bytes
   const hasResumeFile = Array.isArray(resumeFileBytes) && resumeFileBytes.length > 0
   const resumeFileType = body.resumeFile?.type
+  const resumeFileMimeType = body.resumeFile?.mimeType?.trim() ?? ''
   const jobText = body.jobText?.trim() ?? ''
   const roleType = body.roleType?.trim() ?? ''
 
@@ -65,8 +68,13 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     && resumeFileType !== 'txt'
     && resumeFileType !== 'pdf'
     && resumeFileType !== 'docx'
+    && resumeFileType !== 'image'
   ) {
-    errors.push('resumeFile type must be txt, pdf or docx')
+    errors.push('resumeFile type must be txt, pdf, docx or image')
+  }
+
+  if (hasResumeFile && resumeFileType === 'image' && !imageMimeTypes.includes(resumeFileMimeType)) {
+    errors.push('resumeFile mimeType must be image/jpeg, image/png or image/webp')
   }
 
   if (!jobText) {
@@ -100,12 +108,16 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
               ? 'pdf'
               : resumeFileType === 'docx'
                 ? 'docx'
-                : 'txt',
+                : resumeFileType === 'image'
+                  ? 'image'
+                  : 'txt',
           fileBuffer: {
+            byteLength: fileBytes.length,
             toString: () => new TextDecoder().decode(Uint8Array.from(fileBytes)),
             toUint8Array: () => Uint8Array.from(fileBytes),
             toArrayBuffer: () => Uint8Array.from(fileBytes).buffer,
           },
+          mimeType: resumeFileMimeType,
         })
       }
 
