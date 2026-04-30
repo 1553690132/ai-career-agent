@@ -4,7 +4,12 @@ import type { AnalysisResult } from '../../types/analysis'
 type RoleType = 'frontend' | 'backend' | 'product' | 'algorithm'
 
 interface AnalyzeRequestBody {
-  resumeText: string
+  resumeText?: string
+  resumeFile?: {
+    name: string
+    type: 'txt' | 'pdf' | 'docx'
+    bytes: number[]
+  }
   jobText: string
   roleType: RoleType
 }
@@ -21,6 +26,7 @@ interface ApiErrorResponse {
 const minInputLength = 50
 
 const resumeText = ref('')
+const resumeFile = ref<File | null>(null)
 const jobText = ref('')
 const roleType = ref<RoleType>('frontend')
 const isLoading = ref(false)
@@ -37,11 +43,11 @@ const roleTypeOptions: Array<{ label: string; value: RoleType }> = [
 const resumeError = computed(() => {
   const text = resumeText.value.trim()
 
-  if (!text) {
+  if (!text && !resumeFile.value) {
     return '请粘贴或输入简历文本'
   }
 
-  if (text.length < minInputLength) {
+  if (text && text.length < minInputLength) {
     return `简历文本太短，请至少输入 ${minInputLength} 个字符`
   }
 
@@ -80,6 +86,31 @@ const getApiErrorMessage = (error: unknown) => {
   return apiError.data?.message ?? apiError.statusMessage ?? apiError.message ?? '分析失败，请稍后重试'
 }
 
+const handleResumeFileChange = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  resumeFile.value = input.files?.[0] ?? null
+}
+
+const readResumeFileBytes = async (file: File) => {
+  const arrayBuffer = await file.arrayBuffer()
+
+  return Array.from(new Uint8Array(arrayBuffer))
+}
+
+const getResumeFileType = (file: File): 'txt' | 'pdf' | 'docx' => {
+  const fileName = file.name.toLowerCase()
+
+  if (fileName.endsWith('.pdf')) {
+    return 'pdf'
+  }
+
+  if (fileName.endsWith('.docx')) {
+    return 'docx'
+  }
+
+  return 'txt'
+}
+
 const handleAnalyze = async () => {
   hasSubmitted.value = true
   apiErrorMessage.value = ''
@@ -91,10 +122,20 @@ const handleAnalyze = async () => {
   isLoading.value = true
 
   try {
+    const selectedResumeFile = resumeFile.value
     const requestBody: AnalyzeRequestBody = {
-      resumeText: resumeText.value.trim(),
       jobText: jobText.value.trim(),
       roleType: roleType.value,
+    }
+
+    if (selectedResumeFile) {
+      requestBody.resumeFile = {
+        name: selectedResumeFile.name,
+        type: getResumeFileType(selectedResumeFile),
+        bytes: await readResumeFileBytes(selectedResumeFile),
+      }
+    } else {
+      requestBody.resumeText = resumeText.value.trim()
     }
 
     const result = await $fetch<AnalysisResult>('/api/analyze', {
@@ -149,6 +190,12 @@ const handleAnalyze = async () => {
           class="mt-4 min-h-80 flex-1 resize-y rounded-md border border-slate-300 p-4 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
           placeholder="请粘贴候选人的简历文本，例如工作经历、项目经历、技能栈和教育背景。"
         />
+        <input
+          type="file"
+          accept=".pdf,.txt,.docx"
+          class="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+          @change="handleResumeFileChange"
+        >
         <p
           v-if="hasSubmitted && resumeError"
           class="mt-3 text-sm text-rose-600"

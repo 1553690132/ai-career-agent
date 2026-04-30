@@ -1,4 +1,5 @@
 import { mockAnalysisResult } from '../../mocks/analysis.mock'
+import { normalizeResumeInput } from '../services/inputAdapter'
 import { AiWorkflowStepError, runFullAnalysis } from '../services/aiWorkflow'
 import {
   createFallbackMetrics,
@@ -12,6 +13,11 @@ import type { AnalysisResult } from '../../types/analysis'
 
 interface AnalyzeRequestBody {
   resumeText?: string
+  resumeFile?: {
+    name?: string
+    type?: 'txt' | 'pdf' | 'docx'
+    bytes?: number[]
+  }
   jobText?: string
   roleType?: string
 }
@@ -40,15 +46,27 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const errors: string[] = []
 
   const resumeText = body.resumeText?.trim() ?? ''
+  const resumeFileBytes = body.resumeFile?.bytes
+  const hasResumeFile = Array.isArray(resumeFileBytes) && resumeFileBytes.length > 0
+  const resumeFileType = body.resumeFile?.type
   const jobText = body.jobText?.trim() ?? ''
   const roleType = body.roleType?.trim() ?? ''
 
-  if (!resumeText) {
+  if (!resumeText && !hasResumeFile) {
     errors.push('resumeText is required')
-  } else if (resumeText.length < minTextLength) {
+  } else if (resumeText && resumeText.length < minTextLength) {
     errors.push(`resumeText must be at least ${minTextLength} characters`)
-  } else if (resumeText.length > maxTextLength) {
+  } else if (resumeText && resumeText.length > maxTextLength) {
     errors.push(`resumeText must be at most ${maxTextLength} characters`)
+  }
+
+  if (
+    hasResumeFile
+    && resumeFileType !== 'txt'
+    && resumeFileType !== 'pdf'
+    && resumeFileType !== 'docx'
+  ) {
+    errors.push('resumeFile type must be txt, pdf or docx')
   }
 
   if (!jobText) {
@@ -71,8 +89,41 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     })
   }
 
+  const normalizedResume = await (async () => {
+    try {
+      if (hasResumeFile) {
+        const fileBytes = resumeFileBytes ?? []
+
+        return await normalizeResumeInput({
+          type:
+            resumeFileType === 'pdf'
+              ? 'pdf'
+              : resumeFileType === 'docx'
+                ? 'docx'
+                : 'txt',
+          fileBuffer: {
+            toString: () => new TextDecoder().decode(Uint8Array.from(fileBytes)),
+            toUint8Array: () => Uint8Array.from(fileBytes),
+            toArrayBuffer: () => Uint8Array.from(fileBytes).buffer,
+          },
+        })
+      }
+
+      return await normalizeResumeInput({
+        type: 'text',
+        text: resumeText,
+      })
+    } catch (error: unknown) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid resume input',
+        data: { errors: [getErrorMessage(error, 'Invalid resume input')] },
+      })
+    }
+  })()
+
   try {
-    return await runFullAnalysis(resumeText, jobText, roleType)
+    return await runFullAnalysis(normalizedResume.resumeText, jobText, roleType)
   } catch (error: unknown) {
     const failedStep = error instanceof AiWorkflowStepError ? error.step : 'unknown'
     console.warn(
