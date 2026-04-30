@@ -35,37 +35,12 @@ interface ChatCompletionResponse {
   }
 }
 
-const maxRetries = 2
-const retryDelays = [500, 1000]
-
 const getChatCompletionsUrl = (baseURL: string) => {
   const normalizedBaseURL = baseURL.replace(/\/+$/, '')
   return `${normalizedBaseURL}/chat/completions`
 }
 
-const delay = (milliseconds: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, milliseconds)
-  })
-
-const getErrorMessage = (error: unknown) => {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-
-  if (
-    error &&
-    typeof error === 'object' &&
-    'statusMessage' in error &&
-    typeof error.statusMessage === 'string'
-  ) {
-    return error.statusMessage
-  }
-
-  return 'Unknown AI service error'
-}
-
-const callSparkModelOnce = async (
+export const callSparkModel = async (
   prompt: string,
   options: CallSparkModelOptions = {},
 ): Promise<string> => {
@@ -177,37 +152,6 @@ const callSparkModelOnce = async (
   }
 
   return content
-}
-
-export const callSparkModel = async (
-  prompt: string,
-  options: CallSparkModelOptions = {},
-): Promise<string> => {
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    try {
-      return await callSparkModelOnce(prompt, options)
-    } catch (error: unknown) {
-      lastError = error
-      const attemptNumber = attempt + 1
-      const hasMoreAttempts = attempt < maxRetries
-
-      console.warn(
-        `[ai_client] call failed attempt=${attemptNumber}/${maxRetries + 1}: ${getErrorMessage(error)}`,
-      )
-
-      if (hasMoreAttempts) {
-        const retryDelay = retryDelays[attempt] ?? 1000
-        await delay(retryDelay)
-      }
-    }
-  }
-
-  throw createError({
-    statusCode: 502,
-    statusMessage: `AI service failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`,
-  })
 }
 
 export const callLLM = callSparkModel

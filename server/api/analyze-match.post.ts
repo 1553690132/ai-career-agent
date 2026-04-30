@@ -1,3 +1,4 @@
+import { mockAnalysisResult } from '../../mocks/analysis.mock'
 import { AiWorkflowStepError, analyzeMatch } from '../services/aiWorkflow'
 import {
   AiJsonParseError,
@@ -46,20 +47,24 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     return await analyzeMatch(resume, job, roleType)
   } catch (error: unknown) {
     if (error instanceof AiWorkflowStepError && error.sourceError instanceof AiJsonParseError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Analysis match returned invalid JSON',
-        data: {
-          step: error.step,
-          ...createAiJsonErrorData(error.sourceError),
-        },
+      console.warn('[ai_workflow] fallback used after analysis_match JSON failure', {
+        step: error.step,
+        ...createAiJsonErrorData(error.sourceError),
       })
+
+      return {
+        ...mockAnalysisResult,
+        generatedAt: new Date().toISOString(),
+      }
     }
 
-    throw createError({
-      statusCode: 500,
-      statusMessage: getErrorMessage(error, 'Analyze match failed'),
-      data: error instanceof AiWorkflowStepError ? { step: error.step } : undefined,
-    })
+    console.warn(
+      `[ai_workflow] fallback used after analyze_match failure: ${getErrorMessage(error, 'Analyze match failed')}`,
+    )
+
+    return {
+      ...mockAnalysisResult,
+      generatedAt: new Date().toISOString(),
+    }
   }
 })

@@ -1,5 +1,5 @@
 import { mockAnalysisResult } from '../../mocks/analysis.mock'
-import { runFullAnalysis } from '../services/aiWorkflow'
+import { AiWorkflowStepError, runFullAnalysis } from '../services/aiWorkflow'
 import { getErrorMessage } from '../utils/json'
 import type { AnalysisResult } from '../../types/analysis'
 
@@ -51,7 +51,10 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   try {
     return await runFullAnalysis(resumeText, jobText, roleType)
   } catch (error: unknown) {
-    console.warn(`[ai_workflow] fallback used: ${getErrorMessage(error, 'Analyze failed')}`)
+    const failedStep = error instanceof AiWorkflowStepError ? error.step : 'unknown'
+    console.warn(
+      `[ai_workflow] fallback used after ${failedStep} failure: ${getErrorMessage(error, 'Analyze failed')}`,
+    )
 
     return {
       ...mockAnalysisResult,

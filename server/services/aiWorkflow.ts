@@ -1,10 +1,11 @@
-import { callSparkModel } from '../utils/aiClient'
-import { getErrorMessage, parseAiJsonResponse } from '../utils/json'
+import { runAnalyzeMatchChain } from '../chains/analyzeMatchChain'
+import { runJobExtractChain, type MinimalJobExtract } from '../chains/jobExtractChain'
 import {
-  createAnalysisPrompt,
-  createJobExtractPrompt,
-  createResumeExtractPrompt,
-} from '../utils/prompts'
+  runResumeExtractChain,
+  type MinimalResumeExtract,
+  type MinimalSeniorityLevel,
+} from '../chains/resumeExtractChain'
+import { getErrorMessage } from '../utils/json'
 import type {
   AnalysisResult,
   JobProfile,
@@ -24,39 +25,6 @@ export class AiWorkflowStepError extends Error {
   ) {
     super(message)
   }
-}
-
-type MinimalSeniorityLevel = 'intern' | 'junior' | 'mid' | 'senior' | 'unknown'
-
-interface MinimalResumeProject {
-  name: string
-  summary: string
-  skills: string[]
-}
-
-interface MinimalResumeExtract {
-  name?: string
-  headline?: string
-  summary?: string
-  yearsOfExperience?: number
-  seniorityLevel?: MinimalSeniorityLevel
-  targetRoles?: string[]
-  skills?: string[]
-  projects?: MinimalResumeProject[]
-  education?: string[]
-}
-
-interface MinimalJobExtract {
-  title?: string
-  company?: string
-  summary?: string
-  seniorityLevel?: MinimalSeniorityLevel
-  responsibilities?: string[]
-  requiredSkills?: string[]
-  preferredSkills?: string[]
-  requiredYearsOfExperience?: number
-  educationRequirements?: string[]
-  keywords?: string[]
 }
 
 const normalizeStringList = (value: string[] | undefined, limit: number): string[] =>
@@ -168,11 +136,7 @@ export const extractResumeProfile = async (
   logStepStart('resume_extract')
 
   try {
-    const content = await callSparkModel(createResumeExtractPrompt(resumeText, roleType), {
-      temperature: 0,
-      maxTokens: 1000,
-    })
-    const resume = parseAiJsonResponse<MinimalResumeExtract>(content)
+    const resume = await runResumeExtractChain({ resumeText, roleType })
 
     const normalizedResume = normalizeResumeProfile(resume)
     logStepSuccess('resume_extract')
@@ -191,11 +155,7 @@ export const extractJobProfile = async (
   logStepStart('job_extract')
 
   try {
-    const content = await callSparkModel(createJobExtractPrompt(jobText, roleType), {
-      temperature: 0,
-      maxTokens: 800,
-    })
-    const job = parseAiJsonResponse<MinimalJobExtract>(content)
+    const job = await runJobExtractChain({ jobText, roleType })
 
     const normalizedJob = normalizeJobProfile(job)
     logStepSuccess('job_extract')
@@ -216,14 +176,10 @@ export const analyzeMatch = async (
 
   try {
     const analysisInput = createAnalysisInput(resume, job)
-    const content = await callSparkModel(
-      createAnalysisPrompt(JSON.stringify(analysisInput), roleType),
-      {
-        temperature: 0,
-        maxTokens: 1200,
-      },
-    )
-    const analysis = parseAiJsonResponse<Omit<AnalysisResult, 'resume' | 'job'>>(content)
+    const analysis = await runAnalyzeMatchChain({
+      analysisInput: JSON.stringify(analysisInput),
+      roleType,
+    })
 
     const result = {
       resume,
