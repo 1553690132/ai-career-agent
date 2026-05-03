@@ -15,18 +15,13 @@ const isGeneratingPractice = ref(false)
 const pdfErrorMessage = ref('')
 const practiceErrorMessage = ref('')
 const router = useRouter()
+const appContext = useAppContext()
 
 onMounted(() => {
-  const storedResult = sessionStorage.getItem('analysisResult')
+  const storedResult = appContext.getAnalysisResult()
 
-  if (!storedResult) {
-    return
-  }
-
-  try {
-    analysisResult.value = JSON.parse(storedResult) as AnalysisResult
-  } catch {
-    analysisResult.value = mockAnalysisResult
+  if (storedResult) {
+    analysisResult.value = storedResult
   }
 })
 
@@ -64,13 +59,11 @@ const handleGoPractice = async () => {
       method: 'POST',
       body: {
         analysisResult: result,
-        roleType: result.job?.title || 'frontend',
+        roleType: result.job?.title || appContext.getSelectedRoleType() || 'frontend',
       },
     })
 
-    sessionStorage.setItem('practiceSet', JSON.stringify(practiceSet))
-    sessionStorage.setItem('practiceSource', 'base')
-    sessionStorage.removeItem('practiceMdFileName')
+    appContext.savePracticeSet(practiceSet, { source: 'base' })
     await router.push('/practice')
   } catch (error: unknown) {
     console.error('Practice question generation failed:', error)

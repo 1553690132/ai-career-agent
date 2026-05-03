@@ -42,6 +42,7 @@ const isLoading = ref(false)
 const currentLoadingStep = ref(0)
 const hasSubmitted = ref(false)
 const apiErrorMessage = ref('')
+const appContext = useAppContext()
 let loadingTimer: ReturnType<typeof setInterval> | undefined
 
 const roleTypeOptions: Array<{ label: string; value: RoleType }> = [
@@ -210,7 +211,8 @@ const handleAnalyze = async () => {
       body: requestBody,
     })
 
-    sessionStorage.setItem('analysisResult', JSON.stringify(result))
+    appContext.saveAnalysisResult(result)
+    appContext.saveSelectedRoleType(roleType.value)
     stopLoadingProgress()
     await navigateTo('/result')
   } catch (error: unknown) {
@@ -285,4 +287,3 @@ onBeforeUnmount(() => {
     </main>
   </div>
 </template>
-

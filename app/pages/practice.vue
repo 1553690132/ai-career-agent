@@ -32,6 +32,7 @@ const isGeneratingRagQuestions = ref(false)
 const errorMessage = ref('')
 const mdErrorMessage = ref('')
 const mdFile = ref<File | null>(null)
+const appContext = useAppContext()
 
 const currentQuestion = computed(() => practiceSet.value?.questions[currentIndex.value])
 const questionRenderKey = computed(() =>
@@ -40,30 +41,6 @@ const questionRenderKey = computed(() =>
 const sourceLabel = computed(() =>
   practiceSource.value === 'rag' ? '资料增强练习' : '基础练习题',
 )
-
-const parsePracticeSet = (value: string | null | undefined): PracticeSet | null => {
-  if (!value) {
-    return null
-  }
-
-  try {
-    return JSON.parse(value) as PracticeSet
-  } catch {
-    return null
-  }
-}
-
-const parseAnalysisResult = (value: string | null): AnalysisResult | null => {
-  if (!value) {
-    return null
-  }
-
-  try {
-    return JSON.parse(value) as AnalysisResult
-  } catch {
-    return null
-  }
-}
 
 const getApiErrorMessage = (error: unknown) => {
   if (!error || typeof error !== 'object') {
@@ -82,13 +59,7 @@ const getApiErrorMessage = (error: unknown) => {
     ?? '练习题生成失败，请稍后重试'
 }
 
-const readAnalysisResult = () => {
-  if (!process.client) {
-    return null
-  }
-
-  return parseAnalysisResult(sessionStorage.getItem('analysisResult'))
-}
+const readAnalysisResult = () => appContext.getAnalysisResult()
 
 const readFileBytes = async (file: File) => Array.from(new Uint8Array(await file.arrayBuffer()))
 
@@ -112,14 +83,10 @@ const replacePracticeSet = (nextPracticeSet: PracticeSet, source: PracticeSource
   mdSourceFileName.value = source === 'rag' ? fileName : ''
   errorMessage.value = ''
 
-  sessionStorage.setItem('practiceSet', JSON.stringify(nextPracticeSet))
-  sessionStorage.setItem('practiceSource', source)
-
-  if (fileName) {
-    sessionStorage.setItem('practiceMdFileName', fileName)
-  } else {
-    sessionStorage.removeItem('practiceMdFileName')
-  }
+  appContext.savePracticeSet(nextPracticeSet, {
+    source,
+    lastUploadedMdName: fileName,
+  })
 }
 
 const requestPracticeSet = async (analysisResult: AnalysisResult, selectedMdFile: File) => {
@@ -136,12 +103,12 @@ const requestPracticeSet = async (analysisResult: AnalysisResult, selectedMdFile
 }
 
 const loadPracticeSet = () => {
-  const storedPracticeSet = parsePracticeSet(sessionStorage.getItem('practiceSet'))
+  const storedPracticeSet = appContext.getPracticeSet()
 
   if (storedPracticeSet) {
     practiceSet.value = storedPracticeSet
-    practiceSource.value = sessionStorage.getItem('practiceSource') === 'rag' ? 'rag' : 'base'
-    mdSourceFileName.value = sessionStorage.getItem('practiceMdFileName') ?? ''
+    practiceSource.value = appContext.getPracticeSource()
+    mdSourceFileName.value = appContext.getLastUploadedMdName()
     currentIndex.value = 0
     practiceVersion.value += 1
     return
