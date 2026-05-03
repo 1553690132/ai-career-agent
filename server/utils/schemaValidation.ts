@@ -190,3 +190,20 @@ export const validateAnalysisAdviceResult = (data: unknown): void => {
     )
   })
 }
+
+export const validatePracticeSet = (data: unknown): void => {
+  const practiceSet = assertRecord(data, 'practiceSet')
+
+  assertStringField(practiceSet, 'roleType')
+  assertStringArrayField(practiceSet, 'weakSkills')
+
+  assertObjectArrayField(practiceSet, 'questions').forEach((question, index) => {
+    ;['id', 'skill', 'difficulty', 'question', 'intent'].forEach((field) => {
+      assertStringField(question, field, `questions[${index}].${field}`)
+    })
+    if (question.relatedGap !== undefined) {
+      assertStringField(question, 'relatedGap', `questions[${index}].relatedGap`)
+    }
+    assertStringArrayField(question, 'answerTips', `questions[${index}].answerTips`)
+  })
+}

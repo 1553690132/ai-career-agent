@@ -168,3 +168,19 @@ export interface AnalysisResult {
   interviewQuestions: InterviewQuestion[]
   generatedAt?: string
 }
+
+export interface PracticeQuestion {
+  id: string
+  skill: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  question: string
+  intent: string
+  answerTips: string[]
+  relatedGap?: string
+}
+
+export interface PracticeSet {
+  roleType: string
+  weakSkills: string[]
+  questions: PracticeQuestion[]
+}

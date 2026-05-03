@@ -53,7 +53,7 @@ const handleDownloadPdf = async () => {
   <div class="min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-white text-slate-900">
     <AppHeader action="reanalyze" />
 
-    <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-2">
       <section
         class="mb-4 flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-white/80 p-3 shadow-sm shadow-indigo-100/50 backdrop-blur sm:flex-row sm:items-center sm:justify-between"
       >
@@ -122,7 +122,7 @@ const handleDownloadPdf = async () => {
         <section class="grid grid-cols-1 gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <SuggestionSection :resume-suggestions="analysisResult.resumeSuggestions" />
 
-          <InterviewQuestionSection :interview-questions="analysisResult.interviewQuestions" />
+          <InterviewQuestionSection class="self-start" :interview-questions="analysisResult.interviewQuestions" />
         </section>
 
       </div>

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { AnalysisResult } from '../../types/analysis'
 
 type RoleType = 'frontend' | 'backend' | 'product' | 'algorithm'
@@ -71,13 +71,13 @@ const resumeError = computed(() => {
 
 const jobTextError = computed(() => {
   if (jobInputMode.value === 'file') {
-    return jobFile.value ? '' : '请上传岗位 JD 文件'
+    return ''
   }
 
   const text = jobText.value.trim()
 
   if (!text) {
-    return '请输入岗位 JD'
+    return ''
   }
 
   if (text.length < minInputLength) {
@@ -86,7 +86,6 @@ const jobTextError = computed(() => {
 
   return ''
 })
-
 const canSubmit = computed(
   () => !resumeError.value && !jobTextError.value && !isLoading.value,
 )
@@ -202,7 +201,7 @@ const handleAnalyze = async () => {
 
     if (jobInputMode.value === 'file' && selectedJobFile) {
       requestBody.jobFile = await createUploadPayload(selectedJobFile)
-    } else {
+    } else if (jobText.value.trim()) {
       requestBody.jobText = jobText.value.trim()
     }
 
@@ -249,11 +248,9 @@ onBeforeUnmount(() => {
             AI Career Agent
           </p>
           <h1 class="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-            构建更有胜算的求职申请
-          </h1>
+            为你的求职，叠加胜算          </h1>
           <p class="mt-4 text-base leading-7 text-slate-600">
-            上传简历并提供目标岗位 JD，系统会分析匹配度、技能差距、简历优化方向和面试题预测。
-          </p>
+            上传简历并提供目标岗位 JD，系统会分析匹配度、技能差距、简历优化方向和面试题预测。          </p>
         </section>
 
         <section class="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -288,3 +285,4 @@ onBeforeUnmount(() => {
     </main>
   </div>
 </template>
+

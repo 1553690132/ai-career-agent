@@ -1,6 +1,8 @@
-import { analysisAdviceChain } from '../chains/analysisAdviceChain'
+﻿import { analysisAdviceChain } from '../chains/analysisAdviceChain'
 import { analysisScoreChain } from '../chains/analysisScoreChain'
 import { jobExtractChain, type JobExtractChainOutput, type JobJson } from '../chains/jobExtractChain'
+import { resumeReviewAdviceChain } from '../chains/resumeReviewAdviceChain'
+import { resumeReviewScoreChain } from '../chains/resumeReviewScoreChain'
 import {
   resumeExtractChain,
   type ResumeExtractChainOutput,
@@ -22,11 +24,13 @@ export type AiWorkflowStep =
   | 'analysis_match'
   | 'analysis_score'
   | 'analysis_advice'
+  | 'resume_review_score'
+  | 'resume_review_advice'
 export type AnalysisWorkflowStage = 'resume' | 'job' | 'analysis'
 
 export interface AnalysisWorkflowInput {
   resumeText: string
-  jobText: string
+  jobText?: string
   roleType?: string
 }
 
@@ -130,6 +134,16 @@ const normalizeJobProfile = (job: JobJson): JobProfile => ({
   keywords: normalizeStringList(job.keywords, 10),
 })
 
+const createDefaultJobProfile = (roleType: string): JobProfile => ({
+  title: roleType,
+  company: '',
+  summary: '无具体JD，基于目标岗位类型进行通用简历诊断',
+  responsibilities: [],
+  requiredSkills: [],
+  preferredSkills: [],
+  keywords: [],
+})
+
 const logStepStart = (step: AiWorkflowStep) => {
   console.log(`[ai_workflow] ${step} start`)
 }
@@ -165,6 +179,8 @@ export async function runAnalysisWorkflow(
 ): Promise<AnalysisWorkflowResult> {
   const workflowStartTime = Date.now()
   const roleType = input.roleType?.trim() || 'unknown'
+  const jobText = input.jobText?.trim() ?? ''
+  const hasValidJobText = jobText.length > 0
   let failedStage: AnalysisWorkflowStage = 'resume'
 
   console.log('[Workflow] start')
@@ -190,42 +206,59 @@ export async function runAnalysisWorkflow(
       }
     }
 
-    let jobJson: JobExtractChainOutput
     let job: JobProfile
 
-    try {
-      failedStage = 'job'
-      jobJson = await jobExtractChain.invoke({
-        jobText: input.jobText,
-        roleType,
-      })
-      job = normalizeJobProfile(jobJson)
-      console.log('[Workflow] job_extract done')
-    } catch (error: unknown) {
-      console.error('[Workflow] job_extract failed', getErrorMessage(error))
-      return {
-        success: false,
-        error: getErrorMessage(error, 'Job workflow stage failed'),
-        stage: failedStage,
+    if (hasValidJobText) {
+      let jobJson: JobExtractChainOutput
+
+      try {
+        failedStage = 'job'
+        jobJson = await jobExtractChain.invoke({
+          jobText,
+          roleType,
+        })
+        job = normalizeJobProfile(jobJson)
+        console.log('[Workflow] job_extract done')
+      } catch (error: unknown) {
+        console.error('[Workflow] job_extract failed', getErrorMessage(error))
+        return {
+          success: false,
+          error: getErrorMessage(error, 'Job workflow stage failed'),
+          stage: failedStage,
+        }
       }
+    } else {
+      job = createDefaultJobProfile(roleType)
+      console.log('[Workflow] job_extract skipped: no JD provided')
     }
 
     try {
       failedStage = 'analysis'
-      const scoreAnalysis = await analysisScoreChain.invoke({
-        resumeJson: resume,
-        jobJson: job,
-        roleType,
-      })
-      console.log('[Workflow] analysis_score done')
+      const scoreAnalysis = hasValidJobText
+        ? await analysisScoreChain.invoke({
+            resumeJson: resume,
+            jobJson: job,
+            roleType,
+          })
+        : await resumeReviewScoreChain.invoke({
+            resumeJson: resume,
+            roleType,
+          })
+      console.log(hasValidJobText ? '[Workflow] analysis_score done' : '[Workflow] resume_review_score done')
 
-      const adviceAnalysis = await analysisAdviceChain.invoke({
-        resumeJson: resume,
-        jobJson: job,
-        roleType,
-        scoreSummary: scoreAnalysis,
-      })
-      console.log('[Workflow] analysis_advice done')
+      const adviceAnalysis = hasValidJobText
+        ? await analysisAdviceChain.invoke({
+            resumeJson: resume,
+            jobJson: job,
+            roleType,
+            scoreSummary: scoreAnalysis,
+          })
+        : await resumeReviewAdviceChain.invoke({
+            resumeJson: resume,
+            roleType,
+            scoreSummary: scoreAnalysis,
+          })
+      console.log(hasValidJobText ? '[Workflow] analysis_advice done' : '[Workflow] resume_review_advice done')
 
       const analysis = {
         ...scoreAnalysis,
@@ -344,7 +377,7 @@ export const analyzeMatch = async (
 
 export const runFullAnalysis = async (
   resumeText: string,
-  jobText: string,
+  jobText: string | undefined,
   roleType: string,
 ): Promise<AnalysisResult> => {
   const workflowResult = await runAnalysisWorkflow({

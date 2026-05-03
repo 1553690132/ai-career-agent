@@ -4,6 +4,9 @@ export type ChainName =
   | 'analysis_match'
   | 'analysis_score'
   | 'analysis_advice'
+  | 'resume_review_score'
+  | 'resume_review_advice'
+  | 'practice_question'
 
 export type ChainErrorStage = 'llm' | 'parse' | 'validate'
 

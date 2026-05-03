@@ -34,7 +34,7 @@ const matchLevelTextMap: Record<SkillMatch['matchLevel'], string> = {
       </div>
     </div>
 
-    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2">
       <article
         v-for="card in scoreCards"
         :key="card.label"

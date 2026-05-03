@@ -15,7 +15,7 @@ const difficultyClassMap: Record<InterviewQuestion['difficulty'], string> = {
 <template>
   <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
     <h2 class="text-xl font-semibold tracking-tight text-slate-950">
-      Interview Questions
+      面试问题
     </h2>
     <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <article

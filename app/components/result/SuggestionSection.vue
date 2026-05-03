@@ -15,7 +15,7 @@ const priorityClassMap: Record<Priority, string> = {
 <template>
   <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
     <h2 class="text-xl font-semibold tracking-tight text-slate-950">
-      Resume Suggestions
+      简历优化建议
     </h2>
     <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
       <article
@@ -42,7 +42,7 @@ const priorityClassMap: Record<Priority, string> = {
         </p>
         <blockquote
           v-if="suggestion.exampleRewrite"
-          class="mt-3 line-clamp-2 rounded-xl bg-white p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200"
+          class="mt-3 line-clamp-3 h-[76px] rounded-xl bg-white p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200"
         >
           {{ suggestion.exampleRewrite }}
         </blockquote>

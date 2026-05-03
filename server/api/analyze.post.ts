@@ -151,9 +151,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
 
   validateUploadedFile('resumeFile', body.resumeFile, resumeFileType, errors)
 
-  if (!jobText && !hasJobFile) {
-    errors.push('jobText is required')
-  } else if (jobText && jobText.length < minTextLength) {
+  if (jobText && jobText.length < minTextLength) {
     errors.push(`jobText must be at least ${minTextLength} characters`)
   } else if (jobText && jobText.length > maxTextLength) {
     errors.push(`jobText must be at most ${maxTextLength} characters`)
@@ -195,6 +193,10 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   })()
 
   const normalizedJob = await (async () => {
+    if (!jobText && !hasJobFile) {
+      return undefined
+    }
+
     try {
       if (hasJobFile) {
         return await normalizeJobInput(
@@ -216,7 +218,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   })()
 
   try {
-    return await runFullAnalysis(normalizedResume.resumeText, normalizedJob.jobText, roleType)
+    return await runFullAnalysis(normalizedResume.resumeText, normalizedJob?.jobText, roleType)
   } catch (error: unknown) {
     const failedStep = error instanceof AiWorkflowStepError ? error.step : 'unknown'
     console.warn(
