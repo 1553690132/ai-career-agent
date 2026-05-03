@@ -1,4 +1,5 @@
-import { analysisMatchChain } from '../chains/analyzeMatchChain'
+import { analysisAdviceChain } from '../chains/analysisAdviceChain'
+import { analysisScoreChain } from '../chains/analysisScoreChain'
 import { jobExtractChain, type JobExtractChainOutput, type JobJson } from '../chains/jobExtractChain'
 import {
   resumeExtractChain,
@@ -15,7 +16,12 @@ import type {
   SkillItem,
 } from '../../types/analysis'
 
-export type AiWorkflowStep = 'resume_extract' | 'job_extract' | 'analysis_match'
+export type AiWorkflowStep =
+  | 'resume_extract'
+  | 'job_extract'
+  | 'analysis_match'
+  | 'analysis_score'
+  | 'analysis_advice'
 export type AnalysisWorkflowStage = 'resume' | 'job' | 'analysis'
 
 export interface AnalysisWorkflowInput {
@@ -206,11 +212,25 @@ export async function runAnalysisWorkflow(
 
     try {
       failedStage = 'analysis'
-      const analysis = await analysisMatchChain.invoke({
+      const scoreAnalysis = await analysisScoreChain.invoke({
         resumeJson: resume,
         jobJson: job,
         roleType,
       })
+      console.log('[Workflow] analysis_score done')
+
+      const adviceAnalysis = await analysisAdviceChain.invoke({
+        resumeJson: resume,
+        jobJson: job,
+        roleType,
+        scoreSummary: scoreAnalysis,
+      })
+      console.log('[Workflow] analysis_advice done')
+
+      const analysis = {
+        ...scoreAnalysis,
+        ...adviceAnalysis,
+      }
       console.log('[Workflow] analysis_match done')
 
       const totalDuration = Date.now() - workflowStartTime
@@ -295,16 +315,23 @@ export const analyzeMatch = async (
   logStepStart('analysis_match')
 
   try {
-    const analysis = await analysisMatchChain.invoke({
+    const scoreAnalysis = await analysisScoreChain.invoke({
       resumeJson: resume,
       jobJson: job,
       roleType,
+    })
+    const adviceAnalysis = await analysisAdviceChain.invoke({
+      resumeJson: resume,
+      jobJson: job,
+      roleType,
+      scoreSummary: scoreAnalysis,
     })
 
     const result = {
       resume,
       job,
-      ...analysis,
+      ...scoreAnalysis,
+      ...adviceAnalysis,
     }
     logStepSuccess('analysis_match')
 

@@ -4,15 +4,13 @@ const sectionLengthLimits: Record<keyof ResumeSections, number> = {
   basicInfo: 150,
   education: 150,
   skills: 200,
-  workExperience: 300,
-  projects: 400,
+  workExperience: 800,
+  projects: 1200,
   academic: 200,
   campusExperience: 200,
   selfEvaluation: 200,
   others: 100,
 }
-
-const projectSummaryLength = 80
 
 const sectionLabels: Array<{
   key: Exclude<keyof ResumeSections, 'others'>
@@ -30,14 +28,9 @@ const sectionLabels: Array<{
 
 const cleanText = (text: string) =>
   text
-    .replace(/[ \t\u00a0]+/g, ' ')
     .replace(/[|｜◆●■★☆▪•·]+/g, ' ')
     .replace(/[^\S\r\n]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join('\n')
     .trim()
 
 const truncateSection = (text: string, key: keyof ResumeSections) =>
@@ -56,20 +49,10 @@ const normalizeSkills = (text: string) => {
     cleanedText
       .split(/[、，,\/\n]+/)
       .map((item) => item.trim())
-      .filter((item) => item.length >= 2 && item.length <= 20),
+      .filter((item) => item.length >= 1 && item.length <= 30),
   )
 
   return truncateSection(skills.join('、'), 'skills')
-}
-
-const normalizeProjects = (text: string) => {
-  const cleanedText = cleanText(text)
-
-  if (!cleanedText) {
-    return ''
-  }
-
-  return cleanedText.slice(0, projectSummaryLength).trim()
 }
 
 export const normalizeResumeSections = (sections: ResumeSections): ResumeSections => ({
@@ -77,7 +60,7 @@ export const normalizeResumeSections = (sections: ResumeSections): ResumeSection
   education: truncateSection(cleanText(sections.education), 'education'),
   skills: normalizeSkills(sections.skills),
   workExperience: truncateSection(cleanText(sections.workExperience), 'workExperience'),
-  projects: normalizeProjects(sections.projects),
+  projects: truncateSection(cleanText(sections.projects), 'projects'),
   academic: truncateSection(cleanText(sections.academic), 'academic'),
   campusExperience: truncateSection(cleanText(sections.campusExperience), 'campusExperience'),
   selfEvaluation: truncateSection(cleanText(sections.selfEvaluation), 'selfEvaluation'),

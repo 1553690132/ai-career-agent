@@ -137,3 +137,56 @@ export const validateAnalysisResult = (data: unknown): void => {
     )
   })
 }
+
+export const validateAnalysisScoreResult = (data: unknown): void => {
+  const analysis = assertRecord(data, 'analysisScore')
+
+  assertNumberField(analysis, 'overallScore')
+  ;['overallSummary', 'recommendation'].forEach((field) => {
+    assertStringField(analysis, field)
+  })
+  assertStringArrayField(analysis, 'strengths')
+
+  assertObjectArrayField(analysis, 'scoreCards').forEach((item, index) => {
+    assertStringField(item, 'label', `scoreCards[${index}].label`)
+    assertNumberField(item, 'score', `scoreCards[${index}].score`)
+    assertStringField(item, 'summary', `scoreCards[${index}].summary`)
+  })
+
+  assertObjectArrayField(analysis, 'skillMatches').forEach((item, index) => {
+    ;['skillName', 'category', 'matchLevel', 'resumeEvidence', 'jobRequirement'].forEach((field) => {
+      assertStringField(item, field, `skillMatches[${index}].${field}`)
+    })
+    assertNumberField(item, 'score', `skillMatches[${index}].score`)
+  })
+
+  assertObjectArrayField(analysis, 'gaps').forEach((item, index) => {
+    ;['title', 'description', 'priority', 'improvementAdvice'].forEach((field) => {
+      assertStringField(item, field, `gaps[${index}].${field}`)
+    })
+    assertStringArrayField(item, 'relatedSkills', `gaps[${index}].relatedSkills`)
+  })
+}
+
+export const validateAnalysisAdviceResult = (data: unknown): void => {
+  const advice = assertRecord(data, 'analysisAdvice')
+
+  assertObjectArrayField(advice, 'resumeSuggestions').forEach((item, index) => {
+    ;['id', 'type', 'title', 'priority', 'problem', 'suggestion', 'exampleRewrite'].forEach((field) => {
+      assertStringField(item, field, `resumeSuggestions[${index}].${field}`)
+    })
+    assertStringArrayField(item, 'relatedKeywords', `resumeSuggestions[${index}].relatedKeywords`)
+  })
+
+  assertObjectArrayField(advice, 'interviewQuestions').forEach((item, index) => {
+    ;['id', 'type', 'difficulty', 'question', 'intent'].forEach((field) => {
+      assertStringField(item, field, `interviewQuestions[${index}].${field}`)
+    })
+    assertStringArrayField(item, 'relatedSkills', `interviewQuestions[${index}].relatedSkills`)
+    assertStringArrayField(
+      item,
+      'suggestedAnswerPoints',
+      `interviewQuestions[${index}].suggestedAnswerPoints`,
+    )
+  })
+}

@@ -58,7 +58,8 @@ export const extractTextFromImage = async (
     }
 
     const worker = await getWorker()
-    const result = await worker.recognize(fileBuffer.toUint8Array())
+    const imageData = fileBuffer.toUint8Array() as unknown as Parameters<typeof worker.recognize>[0]
+    const result = await worker.recognize(imageData)
     const text = cleanText(result.data.text)
 
     if (text.length < minOcrTextLength) {

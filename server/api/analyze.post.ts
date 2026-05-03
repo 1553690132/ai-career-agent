@@ -1,5 +1,6 @@
 import { mockAnalysisResult } from '../../mocks/analysis.mock'
 import { normalizeResumeInput } from '../services/inputAdapter'
+import { normalizeJobInput } from '../services/jobInputAdapter'
 import { AiWorkflowStepError, runFullAnalysis } from '../services/aiWorkflow'
 import {
   createFallbackMetrics,
@@ -10,22 +11,33 @@ import {
 import { AiJsonParseError, getErrorMessage } from '../utils/json'
 import { SchemaValidationError } from '../utils/schemaValidation'
 import type { AnalysisResult } from '../../types/analysis'
+import type { CommonInput } from '../services/inputCommonAdapter'
+
+type UploadedInputType = 'txt' | 'pdf' | 'docx' | 'image'
+
+interface UploadedInputFile {
+  name?: string
+  type?: UploadedInputType
+  mimeType?: string
+  bytes?: number[]
+}
 
 interface AnalyzeRequestBody {
   resumeText?: string
-  resumeFile?: {
-    name?: string
-    type?: 'txt' | 'pdf' | 'docx' | 'image'
-    mimeType?: string
-    bytes?: number[]
-  }
+  resumeFile?: UploadedInputFile
   jobText?: string
+  jobFile?: UploadedInputFile
   roleType?: string
 }
 
 const minTextLength = 50
 const maxTextLength = 2000
 const imageMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
+const pdfMimeTypes = ['application/pdf']
+const docxMimeTypes = [
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
+const txtMimeTypes = ['text/plain']
 
 const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
   if (!(error instanceof AiWorkflowStepError)) {
@@ -43,16 +55,90 @@ const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
   return 'llm'
 }
 
+const hasUploadedFile = (file?: UploadedInputFile) =>
+  Array.isArray(file?.bytes) && file.bytes.length > 0
+
+const resolveUploadedInputType = (file?: UploadedInputFile): UploadedInputType | undefined => {
+  const mimeType = file?.mimeType?.trim().toLowerCase() ?? ''
+  const fileName = file?.name?.trim().toLowerCase() ?? ''
+
+  if (imageMimeTypes.includes(mimeType)) {
+    return 'image'
+  }
+
+  if (pdfMimeTypes.includes(mimeType) || fileName.endsWith('.pdf')) {
+    return 'pdf'
+  }
+
+  if (docxMimeTypes.includes(mimeType) || fileName.endsWith('.docx')) {
+    return 'docx'
+  }
+
+  if (txtMimeTypes.includes(mimeType) || fileName.endsWith('.txt') || file?.type === 'txt') {
+    return 'txt'
+  }
+
+  return file?.type
+}
+
+const createFileBuffer = (fileBytes: number[]) => ({
+  byteLength: fileBytes.length,
+  toString: () => new TextDecoder().decode(Uint8Array.from(fileBytes)),
+  toUint8Array: () => Uint8Array.from(fileBytes),
+  toArrayBuffer: () => Uint8Array.from(fileBytes).buffer,
+})
+
+const createCommonInputFromFile = (
+  file: UploadedInputFile,
+  inputType: UploadedInputType,
+): CommonInput => {
+  const fileBytes = file.bytes ?? []
+  const fileBuffer = createFileBuffer(fileBytes)
+
+  if (inputType === 'image') {
+    return {
+      type: 'image',
+      fileBuffer,
+      mimeType: file.mimeType?.trim() ?? '',
+    }
+  }
+
+  return {
+    type: inputType,
+    fileBuffer,
+  }
+}
+
+const validateUploadedFile = (
+  fileLabel: string,
+  file: UploadedInputFile | undefined,
+  inputType: UploadedInputType | undefined,
+  errors: string[],
+) => {
+  if (!hasUploadedFile(file)) {
+    return
+  }
+
+  if (!inputType) {
+    errors.push(`${fileLabel} type must be txt, pdf, docx or image`)
+    return
+  }
+
+  if (inputType === 'image' && !imageMimeTypes.includes(file?.mimeType?.trim() ?? '')) {
+    errors.push(`${fileLabel} mimeType must be image/jpeg, image/png or image/webp`)
+  }
+}
+
 export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const body = await readBody<AnalyzeRequestBody>(event)
   const errors: string[] = []
 
   const resumeText = body.resumeText?.trim() ?? ''
-  const resumeFileBytes = body.resumeFile?.bytes
-  const hasResumeFile = Array.isArray(resumeFileBytes) && resumeFileBytes.length > 0
-  const resumeFileType = body.resumeFile?.type
-  const resumeFileMimeType = body.resumeFile?.mimeType?.trim() ?? ''
+  const hasResumeFile = hasUploadedFile(body.resumeFile)
+  const resumeFileType = resolveUploadedInputType(body.resumeFile)
   const jobText = body.jobText?.trim() ?? ''
+  const hasJobFile = hasUploadedFile(body.jobFile)
+  const jobFileType = resolveUploadedInputType(body.jobFile)
   const roleType = body.roleType?.trim() ?? ''
 
   if (!resumeText && !hasResumeFile) {
@@ -63,27 +149,17 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     errors.push(`resumeText must be at most ${maxTextLength} characters`)
   }
 
-  if (
-    hasResumeFile
-    && resumeFileType !== 'txt'
-    && resumeFileType !== 'pdf'
-    && resumeFileType !== 'docx'
-    && resumeFileType !== 'image'
-  ) {
-    errors.push('resumeFile type must be txt, pdf, docx or image')
-  }
+  validateUploadedFile('resumeFile', body.resumeFile, resumeFileType, errors)
 
-  if (hasResumeFile && resumeFileType === 'image' && !imageMimeTypes.includes(resumeFileMimeType)) {
-    errors.push('resumeFile mimeType must be image/jpeg, image/png or image/webp')
-  }
-
-  if (!jobText) {
+  if (!jobText && !hasJobFile) {
     errors.push('jobText is required')
-  } else if (jobText.length < minTextLength) {
+  } else if (jobText && jobText.length < minTextLength) {
     errors.push(`jobText must be at least ${minTextLength} characters`)
-  } else if (jobText.length > maxTextLength) {
+  } else if (jobText && jobText.length > maxTextLength) {
     errors.push(`jobText must be at most ${maxTextLength} characters`)
   }
+
+  validateUploadedFile('jobFile', body.jobFile, jobFileType, errors)
 
   if (!roleType) {
     errors.push('roleType is required')
@@ -100,25 +176,9 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const normalizedResume = await (async () => {
     try {
       if (hasResumeFile) {
-        const fileBytes = resumeFileBytes ?? []
-
-        return await normalizeResumeInput({
-          type:
-            resumeFileType === 'pdf'
-              ? 'pdf'
-              : resumeFileType === 'docx'
-                ? 'docx'
-                : resumeFileType === 'image'
-                  ? 'image'
-                  : 'txt',
-          fileBuffer: {
-            byteLength: fileBytes.length,
-            toString: () => new TextDecoder().decode(Uint8Array.from(fileBytes)),
-            toUint8Array: () => Uint8Array.from(fileBytes),
-            toArrayBuffer: () => Uint8Array.from(fileBytes).buffer,
-          },
-          mimeType: resumeFileMimeType,
-        })
+        return await normalizeResumeInput(
+          createCommonInputFromFile(body.resumeFile ?? {}, resumeFileType ?? 'txt'),
+        )
       }
 
       return await normalizeResumeInput({
@@ -134,8 +194,29 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     }
   })()
 
+  const normalizedJob = await (async () => {
+    try {
+      if (hasJobFile) {
+        return await normalizeJobInput(
+          createCommonInputFromFile(body.jobFile ?? {}, jobFileType ?? 'txt'),
+        )
+      }
+
+      return await normalizeJobInput({
+        type: 'text',
+        text: jobText,
+      })
+    } catch (error: unknown) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid job input',
+        data: { errors: [getErrorMessage(error, 'Invalid job input')] },
+      })
+    }
+  })()
+
   try {
-    return await runFullAnalysis(normalizedResume.resumeText, jobText, roleType)
+    return await runFullAnalysis(normalizedResume.resumeText, normalizedJob.jobText, roleType)
   } catch (error: unknown) {
     const failedStep = error instanceof AiWorkflowStepError ? error.step : 'unknown'
     console.warn(

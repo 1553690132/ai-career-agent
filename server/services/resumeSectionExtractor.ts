@@ -32,13 +32,13 @@ const createEmptySections = (): ResumeSections => ({
 })
 
 const sectionAliasMap: Record<SectionAliasKey, string[]> = {
-  education: ['教育经历', '教育背景', '学历背景', '学习经历', '教育信息'],
-  skills: ['相关技能', '专业技能', '技能', '技能清单', '技能特长', '技术栈', '个人技能'],
-  workExperience: ['工作经历', '实习经历', '工作经验', '实习经验', '任职经历', '职业经历'],
-  projects: ['项目经历', '项目经验', '项目实践', '项目介绍', '代表项目'],
-  academic: ['学术成果', '科研成果', '论文成果', '研究成果', '科研经历'],
-  campusExperience: ['在校经历', '校园经历', '校内经历', '社团经历', '学生工作'],
-  selfEvaluation: ['自我评价', '个人评价', '自我介绍', '个人总结', '个人优势'],
+  education: ['教育经历', '教育背景', '学历背景', '学习经历', '教育信息', 'education'],
+  skills: ['相关技能', '专业技能', '技能', '技能清单', '技能特长', '技术栈', '个人技能', 'skills'],
+  workExperience: ['工作经历', '实习经历', '工作经验', '实习经验', '任职经历', '职业经历', 'experience', 'workexperience'],
+  projects: ['项目经历', '项目经验', '项目实践', '项目介绍', '代表项目', 'projects', 'projectexperience'],
+  academic: ['学术成果', '科研成果', '论文成果', '研究成果', '科研经历', 'academic', 'publications'],
+  campusExperience: ['在校经历', '校园经历', '校内经历', '社团经历', '学生工作', 'campus', 'studentwork'],
+  selfEvaluation: ['自我评价', '个人评价', '自我介绍', '个人总结', '个人优势', 'summary', 'about', 'profile'],
 }
 
 const basicInfoBoundaryKeys: HeadingMatch['key'][] = [
@@ -51,7 +51,7 @@ const basicInfoBoundaryKeys: HeadingMatch['key'][] = [
 const cleanHeadingText = (line: string) =>
   line
     .trim()
-    .replace(/^[【\[\(（\s]+/, '')
+    .replace(/^[【\[\(（\s\d一二三四五六七八九十]+[\.、\s]*/, '')
     .replace(/[】\]\)）:\：\s]+$/, '')
     .trim()
 

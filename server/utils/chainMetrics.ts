@@ -1,4 +1,9 @@
-export type ChainName = 'resume_extract' | 'job_extract' | 'analysis_match'
+export type ChainName =
+  | 'resume_extract'
+  | 'job_extract'
+  | 'analysis_match'
+  | 'analysis_score'
+  | 'analysis_advice'
 
 export type ChainErrorStage = 'llm' | 'parse' | 'validate'
 

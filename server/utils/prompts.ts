@@ -81,6 +81,10 @@ Do not include resume or job. Server will merge them later.
 Use only these category values:
 programming, framework, tool, cloud, database, ai, domain, soft_skill, language, other.
 Never output "performance".
+Only skillMatches.category uses the category enum above.
+scoreCards.label must be a natural short Chinese display phrase, not an enum or English category.
+Good label examples: 前端基础, Vue能力, 工程化能力, 项目相关度, TypeScript能力, 经验匹配度.
+Forbidden scoreCards.label values: programming, framework, tool, cloud, database, program, framew, progra, db.
 
 Return this exact schema:
 {
@@ -107,4 +111,72 @@ Limits:
 
 Input:
 ${analysisInput}
+`.trim()
+
+export const createAnalysisScorePrompt = (analysisInput: string, roleType: string) => `
+Create a compact ${roleType} scoring JSON.
+${strictJsonInstruction}
+Do not include resume, job, resumeSuggestions, or interviewQuestions.
+
+Use only these category values:
+programming, framework, tool, cloud, database, ai, domain, soft_skill, language, other.
+Never output "performance".
+
+Return this exact schema:
+{
+  "overallScore": "number, 0-100",
+  "overallSummary": "string, max 40 Chinese chars",
+  "recommendation": "highly_recommended | recommended | borderline | not_recommended",
+  "scoreCards": [{"label":"string","score":"number","summary":"string"}],
+  "skillMatches": [{"skillName":"string","category":"string","matchLevel":"strong | partial | weak | missing","resumeEvidence":"string","jobRequirement":"string","score":"number"}],
+  "strengths": "string[]",
+  "gaps": [{"title":"string","description":"string","priority":"high | medium | low","relatedSkills":"string[]","improvementAdvice":"string"}]
+}
+
+Limits:
+- scoreCards: exactly 4.
+- scoreCards.label: natural Chinese phrase, max 8 Chinese chars.
+- scoreCards.summary: natural Chinese phrase, max 30 Chinese chars.
+- scoreCards.summary must be complete, not truncated fragments.
+- Bad summary examples: "掌握JS，缺TS深入", "缺TS深", "工程化不".
+- Good summary examples: "基础扎实", "缺少TS实践", "项目匹配较高", "工程化经验不足".
+- skillMatches: max 6.
+- strengths: max 3, each max 40 Chinese chars.
+- gaps: max 4.
+- gap.description: max 40 Chinese chars.
+- gap.improvementAdvice: max 40 Chinese chars.
+- gap.relatedSkills: max 2 strings.
+- Keep content concise and complete.
+
+Input:
+${analysisInput}
+`.trim()
+
+export const createAnalysisAdvicePrompt = (
+  adviceInput: string,
+  roleType: string,
+) => `
+Create compact ${roleType} advice JSON.
+${strictJsonInstruction}
+Return only resumeSuggestions and interviewQuestions.
+
+Return this exact schema:
+{
+  "resumeSuggestions": [{"id":"string","type":"summary | experience | project | skill | keyword | format | other","title":"string","priority":"high | medium | low","problem":"string","suggestion":"string","exampleRewrite":"string","relatedKeywords":"string[]"}],
+  "interviewQuestions": [{"id":"string","type":"technical | project | behavioral | system_design | case_study | other","difficulty":"easy | medium | hard","question":"string","intent":"string","relatedSkills":"string[]","suggestedAnswerPoints":"string[]"}]
+}
+
+Limits:
+- resumeSuggestions: max 4.
+- interviewQuestions: max 4.
+- All strings must be short and meaningful.
+- problem/suggestion/exampleRewrite: max 40 Chinese chars each.
+- question: max 50 Chinese chars.
+- intent: max 40 Chinese chars.
+- relatedKeywords: max 2 strings.
+- relatedSkills: max 2 strings.
+- suggestedAnswerPoints: max 2 strings, each max 20 Chinese chars.
+
+Input:
+${adviceInput}
 `.trim()
