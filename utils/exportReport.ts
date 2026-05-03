@@ -129,50 +129,313 @@ export function downloadMarkdown(result: AnalysisResult): void {
   URL.revokeObjectURL(url)
 }
 
-export async function downloadResultPdf(elementId: string): Promise<void> {
-  if (typeof window === 'undefined') {
+const recommendationTextMap: Record<AnalysisResult['recommendation'], string> = {
+  highly_recommended: '强匹配候选人',
+  recommended: '良好匹配候选人',
+  borderline: '具备潜力候选人',
+  not_recommended: '匹配度较低',
+}
+
+type PdfDocument = InstanceType<typeof import('jspdf').jsPDF>
+
+const pdfColors = {
+  primary: [79, 70, 229],
+  text: [17, 24, 39],
+  secondary: [55, 65, 81],
+  muted: [107, 114, 128],
+  border: [229, 231, 235],
+  background: [255, 255, 255],
+  purpleSoft: [237, 233, 254],
+  cardBg: [248, 250, 252],
+} as const
+
+type PdfColor = readonly [number, number, number]
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+
+  for (let i = 0; i < bytes.byteLength; i += 1) {
+    binary += String.fromCharCode(bytes[i] ?? 0)
+  }
+
+  return btoa(binary)
+}
+
+async function loadChineseFont(doc: PdfDocument): Promise<void> {
+  const response = await fetch('/fonts/NotoSansSC-Regular.ttf')
+
+  if (!response.ok) {
+    throw new Error('Failed to load Chinese font')
+  }
+
+  const fontBuffer = await response.arrayBuffer()
+  const fontBase64 = arrayBufferToBase64(fontBuffer)
+
+  doc.addFileToVFS('NotoSansSC-Regular.ttf', fontBase64)
+  doc.addFont('NotoSansSC-Regular.ttf', 'NotoSansSC', 'normal')
+  doc.setFont('NotoSansSC', 'normal')
+}
+
+const setPdfTextColor = (pdf: PdfDocument, color: PdfColor) => {
+  pdf.setTextColor(color[0], color[1], color[2])
+}
+
+const setPdfFillColor = (pdf: PdfDocument, color: PdfColor) => {
+  pdf.setFillColor(color[0], color[1], color[2])
+}
+
+const setPdfDrawColor = (pdf: PdfDocument, color: PdfColor) => {
+  pdf.setDrawColor(color[0], color[1], color[2])
+}
+
+const addWrappedText = (
+  pdf: PdfDocument,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight = 6,
+): number => {
+  const lines = pdf.splitTextToSize(safeText(text), maxWidth) as string[]
+  pdf.text(lines, x, y)
+  return y + lines.length * lineHeight
+}
+
+const addSectionTitle = (pdf: PdfDocument, title: string, x: number, y: number): number => {
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(17)
+  setPdfTextColor(pdf, pdfColors.text)
+  pdf.text(title, x, y)
+  setPdfDrawColor(pdf, pdfColors.primary)
+  pdf.setLineWidth(0.6)
+  pdf.line(x, y + 3, x + 22, y + 3)
+  return y + 13
+}
+
+const addSmallCard = (
+  pdf: PdfDocument,
+  title: string,
+  body: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  score?: number,
+) => {
+  setPdfFillColor(pdf, pdfColors.cardBg)
+  setPdfDrawColor(pdf, pdfColors.border)
+  pdf.roundedRect(x, y, width, height, 4, 4, 'FD')
+
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(11)
+  setPdfTextColor(pdf, pdfColors.text)
+  pdf.text(safeText(title), x + 5, y + 9)
+
+  if (typeof score === 'number') {
+    pdf.setFontSize(13)
+    setPdfTextColor(pdf, pdfColors.primary)
+    pdf.text(`${score}%`, x + width - 23, y + 9)
+  }
+
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(9)
+  setPdfTextColor(pdf, pdfColors.secondary)
+  addWrappedText(pdf, body, x + 5, y + 18, width - 10, 4.5)
+}
+
+const addBulletList = (
+  pdf: PdfDocument,
+  items: string[],
+  x: number,
+  y: number,
+  maxWidth: number,
+  maxItems = 6,
+): number => {
+  let cursorY = y
+
+  safeArray(items).slice(0, maxItems).forEach((item) => {
+    setPdfFillColor(pdf, pdfColors.primary)
+    pdf.circle(x, cursorY - 1.5, 1.2, 'F')
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(10)
+    setPdfTextColor(pdf, pdfColors.secondary)
+    cursorY = addWrappedText(pdf, item, x + 5, cursorY, maxWidth - 5, 5) + 2
+  })
+
+  return cursorY
+}
+
+const addFooter = (pdf: PdfDocument, pageNumber: number) => {
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(8)
+  setPdfTextColor(pdf, pdfColors.muted)
+  pdf.text(`ResumeFlow AI · 第 ${pageNumber} 页`, 20, 286)
+}
+
+export async function downloadResultPdf(result: AnalysisResult): Promise<void> {
+  const runtimeProcess = typeof process === 'undefined'
+    ? undefined
+    : (process as NodeJS.Process & { client?: boolean })
+
+  if (runtimeProcess?.client === false) {
     return
   }
 
-  const element = document.getElementById(elementId)
-
-  if (!element) {
-    throw new Error(`Report element not found: ${elementId}`)
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return
   }
 
-  const [{ default: html2canvas }, { default: JsPDF }] = await Promise.all([
-    import('html2canvas'),
-    import('jspdf'),
-  ])
+  const { jsPDF } = await import('jspdf')
+  const pdf = new jsPDF('p', 'mm', 'a4')
+  await loadChineseFont(pdf)
 
-  const canvas = await html2canvas(element, {
-    backgroundColor: '#ffffff',
-    logging: false,
-    scale: Math.min(window.devicePixelRatio || 2, 2),
-    useCORS: true,
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const marginX = 20
+  const contentWidth = pageWidth - marginX * 2
+
+  pdf.setProperties({
+    title: 'ResumeFlow AI 求职匹配分析报告',
+    subject: 'AI 求职匹配分析报告',
+    creator: 'ResumeFlow AI',
   })
 
-  const pdf = new JsPDF('p', 'mm', 'a4')
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 10
-  const imageWidth = pageWidth - margin * 2
-  const imageHeight = (canvas.height * imageWidth) / canvas.width
-  const pageContentHeight = pageHeight - margin * 2
-  const imageData = canvas.toDataURL('image/png', 1)
+  // Page 1: Overview
+  setPdfFillColor(pdf, pdfColors.background)
+  pdf.rect(0, 0, 210, 297, 'F')
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(23)
+  setPdfTextColor(pdf, pdfColors.text)
+  pdf.text('ResumeFlow AI 求职匹配分析报告', marginX, 28)
 
-  let heightLeft = imageHeight
-  let y = margin
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(9)
+  setPdfTextColor(pdf, pdfColors.muted)
+  pdf.text(`生成时间：${safeText(result.generatedAt || new Date().toISOString())}`, marginX, 36)
 
-  pdf.addImage(imageData, 'PNG', margin, y, imageWidth, imageHeight)
-  heightLeft -= pageContentHeight
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(48)
+  setPdfTextColor(pdf, pdfColors.primary)
+  pdf.text(`${safeText(result.overallScore)}%`, marginX, 62)
 
-  while (heightLeft > 0) {
-    y -= pageContentHeight
-    pdf.addPage()
-    pdf.addImage(imageData, 'PNG', margin, y, imageWidth, imageHeight)
-    heightLeft -= pageContentHeight
-  }
+  setPdfFillColor(pdf, pdfColors.purpleSoft)
+  setPdfDrawColor(pdf, pdfColors.border)
+  pdf.roundedRect(marginX, 70, 78, 12, 6, 6, 'FD')
+  pdf.setFontSize(10)
+  setPdfTextColor(pdf, pdfColors.primary)
+  pdf.text(recommendationTextMap[result.recommendation] || safeText(result.recommendation), marginX + 5, 78)
+
+  pdf.setFont('NotoSansSC', 'normal')
+  pdf.setFontSize(11)
+  setPdfTextColor(pdf, pdfColors.secondary)
+  addWrappedText(pdf, result.overallSummary, marginX, 96, contentWidth, 6)
+
+  let cardY = 132
+  const cardWidth = 80
+  const cardHeight = 38
+  safeArray(result.scoreCards).slice(0, 4).forEach((card, index) => {
+    const x = marginX + (index % 2) * (cardWidth + 10)
+    const y = cardY + Math.floor(index / 2) * (cardHeight + 10)
+    addSmallCard(
+      pdf,
+      card.label,
+      card.summary,
+      x,
+      y,
+      cardWidth,
+      cardHeight,
+      card.score,
+    )
+  })
+  addFooter(pdf, 1)
+
+  // Page 2: Strengths, gaps, and skills
+  pdf.addPage()
+  let cursorY = 28
+  cursorY = addSectionTitle(pdf, '核心优势', marginX, cursorY)
+  cursorY = addBulletList(pdf, result.strengths, marginX, cursorY, contentWidth, 5) + 6
+
+  cursorY = addSectionTitle(pdf, '需要提升', marginX, cursorY)
+  safeArray(result.gaps).slice(0, 5).forEach((gap, index) => {
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(10)
+    setPdfTextColor(pdf, pdfColors.text)
+    pdf.text(`${index + 1}. ${safeText(gap.title)}`, marginX, cursorY)
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(9)
+    setPdfTextColor(pdf, pdfColors.secondary)
+    cursorY = addWrappedText(
+      pdf,
+      `优先级：${safeText(gap.priority)}。${safeText(gap.improvementAdvice || gap.description)}`,
+      marginX,
+      cursorY + 6,
+      contentWidth,
+      5,
+    ) + 4
+  })
+
+  cursorY = addSectionTitle(pdf, '技能匹配', marginX, cursorY + 4)
+  safeArray(result.skillMatches).slice(0, 8).forEach((skill, index) => {
+    setPdfDrawColor(pdf, pdfColors.border)
+    pdf.line(marginX, cursorY - 3, pageWidth - marginX, cursorY - 3)
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(10)
+    setPdfTextColor(pdf, pdfColors.text)
+    pdf.text(`${index + 1}. ${safeText(skill.skillName)}`, marginX, cursorY + 2)
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(9)
+    setPdfTextColor(pdf, pdfColors.primary)
+    pdf.text(`${safeText(skill.matchLevel)} · ${safeText(skill.score)}%`, pageWidth - marginX - 42, cursorY + 2)
+    setPdfTextColor(pdf, pdfColors.secondary)
+    cursorY = addWrappedText(pdf, safeText(skill.resumeEvidence || skill.jobRequirement || skill.category), marginX, cursorY + 9, contentWidth, 5) + 3
+  })
+  addFooter(pdf, 2)
+
+  // Page 3: Suggestions and interview questions
+  pdf.addPage()
+  cursorY = 28
+  cursorY = addSectionTitle(pdf, '简历优化建议', marginX, cursorY)
+  safeArray(result.resumeSuggestions).slice(0, 5).forEach((suggestion, index) => {
+    setPdfFillColor(pdf, pdfColors.cardBg)
+    setPdfDrawColor(pdf, pdfColors.border)
+    pdf.roundedRect(marginX, cursorY - 5, contentWidth, 34, 4, 4, 'FD')
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(10)
+    setPdfTextColor(pdf, pdfColors.text)
+    pdf.text(`${index + 1}. ${safeText(suggestion.title)}`, marginX + 5, cursorY + 2)
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(9)
+    setPdfTextColor(pdf, pdfColors.secondary)
+    addWrappedText(
+      pdf,
+      `优先级：${safeText(suggestion.priority)}。${safeText(suggestion.suggestion || suggestion.problem)}`,
+      marginX + 5,
+      cursorY + 9,
+      contentWidth - 10,
+      4.5,
+    )
+    cursorY += 40
+  })
+
+  cursorY = addSectionTitle(pdf, '面试题预测', marginX, cursorY + 5)
+  safeArray(result.interviewQuestions).slice(0, 5).forEach((question, index) => {
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(10)
+    setPdfTextColor(pdf, pdfColors.text)
+    cursorY = addWrappedText(pdf, `${index + 1}. ${safeText(question.question)}`, marginX, cursorY, contentWidth, 5)
+    pdf.setFont('NotoSansSC', 'normal')
+    pdf.setFontSize(9)
+    setPdfTextColor(pdf, pdfColors.secondary)
+    cursorY = addWrappedText(
+      pdf,
+      `难度：${safeText(question.difficulty)}。考察意图：${safeText(question.intent)}`,
+      marginX,
+      cursorY + 2,
+      contentWidth,
+      5,
+    ) + 5
+  })
+  addFooter(pdf, 3)
 
   pdf.save('resume-analysis-report.pdf')
 }

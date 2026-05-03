@@ -11,6 +11,7 @@ import { downloadMarkdown, downloadResultPdf } from '../../utils/exportReport'
 
 const analysisResult = ref<AnalysisResult>(mockAnalysisResult)
 const isExportingPdf = ref(false)
+const pdfErrorMessage = ref('')
 
 onMounted(() => {
   const storedResult = sessionStorage.getItem('analysisResult')
@@ -37,7 +38,11 @@ const handleDownloadPdf = async () => {
 
   try {
     isExportingPdf.value = true
-    await downloadResultPdf('analysis-report')
+    pdfErrorMessage.value = ''
+    await downloadResultPdf(analysisResult.value)
+  } catch (error) {
+    console.error('PDF export failed:', error)
+    pdfErrorMessage.value = 'PDF 生成失败，请稍后重试'
   } finally {
     isExportingPdf.value = false
   }
@@ -75,10 +80,16 @@ const handleDownloadPdf = async () => {
             :disabled="isExportingPdf"
             @click="handleDownloadPdf"
           >
-            {{ isExportingPdf ? '正在生成 PDF...' : '下载 PDF' }}
+            {{ isExportingPdf ? '生成中...' : '下载 PDF' }}
           </button>
         </div>
       </section>
+      <p
+        v-if="pdfErrorMessage"
+        class="-mt-2 mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
+      >
+        {{ pdfErrorMessage }}
+      </p>
 
       <div
         id="analysis-report"

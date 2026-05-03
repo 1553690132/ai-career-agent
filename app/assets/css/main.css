@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+.exporting-pdf,
+.exporting-pdf * {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #e5e7eb !important;
+  box-shadow: none !important;
+}
+
+.exporting-pdf .pdf-purple {
+  color: #4f46e5 !important;
+}
