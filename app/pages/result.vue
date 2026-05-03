@@ -6,12 +6,15 @@ import InterviewQuestionSection from '../components/result/InterviewQuestionSect
 import ResultHero from '../components/result/ResultHero.vue'
 import StrengthImprovePanel from '../components/result/StrengthImprovePanel.vue'
 import SuggestionSection from '../components/result/SuggestionSection.vue'
-import type { AnalysisResult } from '../../types/analysis'
+import type { AnalysisResult, PracticeSet } from '../../types/analysis'
 import { downloadMarkdown, downloadResultPdf } from '../../utils/exportReport'
 
 const analysisResult = ref<AnalysisResult>(mockAnalysisResult)
 const isExportingPdf = ref(false)
+const isGeneratingPractice = ref(false)
 const pdfErrorMessage = ref('')
+const practiceErrorMessage = ref('')
+const router = useRouter()
 
 onMounted(() => {
   const storedResult = sessionStorage.getItem('analysisResult')
@@ -47,6 +50,35 @@ const handleDownloadPdf = async () => {
     isExportingPdf.value = false
   }
 }
+
+const handleGoPractice = async () => {
+  if (isGeneratingPractice.value) {
+    return
+  }
+
+  try {
+    isGeneratingPractice.value = true
+    practiceErrorMessage.value = ''
+    const result = analysisResult.value
+    const practiceSet = await $fetch<PracticeSet>('/api/practice/generate', {
+      method: 'POST',
+      body: {
+        analysisResult: result,
+        roleType: result.job?.title || 'frontend',
+      },
+    })
+
+    sessionStorage.setItem('practiceSet', JSON.stringify(practiceSet))
+    sessionStorage.setItem('practiceSource', 'base')
+    sessionStorage.removeItem('practiceMdFileName')
+    await router.push('/practice')
+  } catch (error: unknown) {
+    console.error('Practice question generation failed:', error)
+    practiceErrorMessage.value = '练习题生成失败，请稍后重试'
+  } finally {
+    isGeneratingPractice.value = false
+  }
+}
 </script>
 
 <template>
@@ -62,7 +94,7 @@ const handleDownloadPdf = async () => {
             分析报告已生成
           </p>
           <p class="mt-0.5 text-xs text-slate-500">
-            可下载当前页面的 Markdown 或 PDF 报告。
+            可下载当前页面的 Markdown 或 PDF 报告，也可以进入专项面试练习。
           </p>
         </div>
 
@@ -84,11 +116,18 @@ const handleDownloadPdf = async () => {
           </button>
         </div>
       </section>
+
       <p
         v-if="pdfErrorMessage"
         class="-mt-2 mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
       >
         {{ pdfErrorMessage }}
+      </p>
+      <p
+        v-if="practiceErrorMessage"
+        class="-mt-2 mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600"
+      >
+        {{ practiceErrorMessage }}
       </p>
 
       <div
@@ -99,6 +138,8 @@ const handleDownloadPdf = async () => {
           :overall-score="analysisResult.overallScore"
           :overall-summary="analysisResult.overallSummary"
           :recommendation="analysisResult.recommendation"
+          :practice-loading="isGeneratingPractice"
+          @practice="handleGoPractice"
         />
 
         <BigPicture
@@ -124,15 +165,16 @@ const handleDownloadPdf = async () => {
 
           <InterviewQuestionSection class="self-start" :interview-questions="analysisResult.interviewQuestions" />
         </section>
-
       </div>
 
       <section class="flex w-full justify-center py-3">
         <button
           type="button"
-          class="inline-flex h-11 w-full max-w-xs items-center justify-center rounded-full bg-indigo-600 px-5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 sm:w-auto"
+          :disabled="isGeneratingPractice"
+          class="inline-flex h-11 w-full max-w-xs items-center justify-center rounded-full bg-indigo-600 px-5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300 sm:w-auto"
+          @click="handleGoPractice"
         >
-          Next: Practice Interview →
+          {{ isGeneratingPractice ? '生成题目中...' : 'Next: Practice Interview →' }}
         </button>
       </section>
     </main>

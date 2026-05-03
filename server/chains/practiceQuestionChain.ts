@@ -1,4 +1,4 @@
-import { createPracticeQuestionPrompt } from '../utils/prompts'
+﻿import { createPracticeQuestionPrompt } from '../utils/prompts'
 import { callWithLangChain } from '../utils/langchainSparkModel'
 import { AiJsonParseError, getErrorMessage, parseAiJsonResponse } from '../utils/json'
 import { SchemaValidationError, validatePracticeSet } from '../utils/schemaValidation'
@@ -14,6 +14,7 @@ import type {
 export interface PracticeQuestionChainInput {
   analysisResult: AnalysisResult
   roleType: string
+  retrievedContext?: string[]
 }
 
 export type PracticeQuestionChainOutput = PracticeSet
@@ -65,6 +66,7 @@ const createPracticeInput = (
   analysisResult: AnalysisResult,
   roleType: string,
   weakSkills: string[],
+  retrievedContext: string[] = [],
 ) => {
   const weakSkillSet = new Set(weakSkills)
   const weakSkillMatches = analysisResult.skillMatches
@@ -90,6 +92,7 @@ const createPracticeInput = (
       relatedSkills: gap.relatedSkills?.slice(0, 3) ?? [],
     })),
     weakSkillMatches,
+    retrievedContext: retrievedContext.slice(0, 4),
   }
 }
 
@@ -130,7 +133,12 @@ export const practiceQuestionChain = {
   async invoke(input: PracticeQuestionChainInput): Promise<PracticeQuestionChainOutput> {
     console.log('[Chain] practice_question start')
     const weakSkills = extractWeakSkills(input.analysisResult)
-    const practiceInput = createPracticeInput(input.analysisResult, input.roleType, weakSkills)
+    const practiceInput = createPracticeInput(
+      input.analysisResult,
+      input.roleType,
+      weakSkills,
+      input.retrievedContext,
+    )
     const practiceInputText = JSON.stringify(practiceInput)
     const prompt = createPracticeQuestionPrompt(practiceInputText)
     const startTime = Date.now()
@@ -194,3 +202,4 @@ export const practiceQuestionChain = {
 
 export const runPracticeQuestionChain = (input: PracticeQuestionChainInput) =>
   practiceQuestionChain.invoke(input)
+

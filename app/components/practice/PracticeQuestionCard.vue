@@ -3,6 +3,7 @@ import type { PracticeQuestion } from '../../../types/analysis'
 
 const props = defineProps<{
   question: PracticeQuestion
+  disabled?: boolean
 }>()
 
 const showIntent = ref(false)
@@ -50,14 +51,16 @@ const difficultyClass = computed(() => {
     <div class="mt-6 grid gap-3 sm:grid-cols-2">
       <button
         type="button"
-        class="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+        class="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="disabled"
         @click="showIntent = !showIntent"
       >
         {{ showIntent ? '收起考察意图' : '查看考察意图' }}
       </button>
       <button
         type="button"
-        class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="disabled"
         @click="showTips = !showTips"
       >
         {{ showTips ? '收起解析' : '查看解析' }}

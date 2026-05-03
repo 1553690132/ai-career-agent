@@ -7,6 +7,11 @@ const props = defineProps<{
   overallScore: number
   recommendation: Recommendation
   overallSummary: string
+  practiceLoading?: boolean
+}>()
+
+const emit = defineEmits<{
+  practice: []
 }>()
 
 const recommendationTitleMap: Record<Recommendation, string> = {
@@ -50,9 +55,11 @@ const recommendationTitle = computed(() => recommendationTitleMap[props.recommen
           </NuxtLink>
           <button
             type="button"
-            class="inline-flex h-10 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+            :disabled="practiceLoading"
+            class="inline-flex h-10 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+            @click="emit('practice')"
           >
-            Practice Interview
+            {{ practiceLoading ? '生成题目中...' : 'Practice Interview' }}
           </button>
         </div>
       </div>

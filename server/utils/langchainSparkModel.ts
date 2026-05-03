@@ -8,11 +8,11 @@ interface SparkLLMCallOptions extends BaseLLMCallOptions {
 
 class SparkLLM extends LLM<SparkLLMCallOptions> {
   _llmType(): string {
-    return 'spark-http'
+    return 'configured-http-llm'
   }
 
   async _call(prompt: string, options: this['ParsedCallOptions']): Promise<string> {
-    console.log('[LangChain] calling spark model')
+    console.log('[LangChain] calling configured model')
 
     try {
       const content = await callLLM(prompt, {

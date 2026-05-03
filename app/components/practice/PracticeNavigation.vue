@@ -2,6 +2,7 @@
 const props = defineProps<{
   currentIndex: number
   total: number
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -11,6 +12,8 @@ const emit = defineEmits<{
 
 const isFirst = computed(() => props.currentIndex <= 0)
 const isLast = computed(() => props.currentIndex >= props.total - 1)
+const isPreviousDisabled = computed(() => props.disabled || isFirst.value)
+const isNextDisabled = computed(() => props.disabled || isLast.value)
 </script>
 
 <template>
@@ -18,7 +21,7 @@ const isLast = computed(() => props.currentIndex >= props.total - 1)
     <button
       type="button"
       class="h-11 rounded-full border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      :disabled="isFirst"
+      :disabled="isPreviousDisabled"
       @click="emit('previous')"
     >
       上一题
@@ -31,7 +34,7 @@ const isLast = computed(() => props.currentIndex >= props.total - 1)
     <button
       type="button"
       class="h-11 rounded-full bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
-      :disabled="isLast"
+      :disabled="isNextDisabled"
       @click="emit('next')"
     >
       下一题

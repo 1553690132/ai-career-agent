@@ -1,33 +1,32 @@
 import { createError } from 'h3'
-import { callMimoModel } from './mimoClient'
 
-interface AiRuntimeConfig {
-  llmProvider?: string
-  sparkApiKey?: string
-  sparkBaseURL?: string
-  sparkModel?: string
+interface MimoRuntimeConfig {
+  mimoApiKey?: string
+  mimoBaseURL?: string
+  mimoModel?: string
 }
 
-interface ChatCompletionRequest {
+interface MimoChatCompletionRequest {
   model: string
   messages: Array<{
     role: 'user'
     content: string
   }>
   temperature: number
-  thinking: {
-    type: 'disabled'
+  chat_template_kwargs: {
+    enable_thinking: false
   }
   max_tokens?: number
 }
 
-interface CallSparkModelOptions {
+interface CallMimoModelOptions {
   temperature?: number
   maxTokens?: number
 }
 
-interface ChatCompletionResponse {
+interface MimoChatCompletionResponse {
   choices?: Array<{
+    finish_reason?: string | null
     message?: {
       content?: string | null
     }
@@ -42,37 +41,37 @@ const getChatCompletionsUrl = (baseURL: string) => {
   return `${normalizedBaseURL}/chat/completions`
 }
 
-export const callSparkModel = async (
+export const callMimoModel = async (
   prompt: string,
-  options: CallSparkModelOptions = {},
+  options: CallMimoModelOptions = {},
 ): Promise<string> => {
-  const config = useRuntimeConfig() as unknown as AiRuntimeConfig
-  const apiKey = config.sparkApiKey?.trim()
-  const baseURL = config.sparkBaseURL?.trim()
-  const model = config.sparkModel?.trim()
+  const config = useRuntimeConfig() as unknown as MimoRuntimeConfig
+  const apiKey = config.mimoApiKey?.trim()
+  const baseURL = config.mimoBaseURL?.trim()
+  const model = config.mimoModel?.trim()
 
   if (!apiKey) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Spark API key is not configured',
+      statusMessage: 'MiMo API key is not configured',
     })
   }
 
   if (!baseURL) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Spark baseURL is not configured',
+      statusMessage: 'MiMo baseURL is not configured',
     })
   }
 
   if (!model) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Spark model is not configured',
+      statusMessage: 'MiMo model is not configured',
     })
   }
 
-  const requestBody: ChatCompletionRequest = {
+  const requestBody: MimoChatCompletionRequest = {
     model,
     messages: [
       {
@@ -81,8 +80,8 @@ export const callSparkModel = async (
       },
     ],
     temperature: options.temperature ?? 0.2,
-    thinking: {
-      type: 'disabled',
+    chat_template_kwargs: {
+      enable_thinking: false,
     },
   }
 
@@ -104,7 +103,7 @@ export const callSparkModel = async (
   } catch {
     throw createError({
       statusCode: 502,
-      statusMessage: 'Failed to connect to AI service',
+      statusMessage: 'Failed to connect to MiMo service',
     })
   }
 
@@ -112,60 +111,54 @@ export const callSparkModel = async (
 
   try {
     rawResponseText = await response.text()
-    console.log('SPARK RAW RESPONSE:', rawResponseText)
+    console.log('MIMO RAW RESPONSE:', rawResponseText)
   } catch {
     throw createError({
       statusCode: 502,
-      statusMessage: 'Failed to read AI service response',
+      statusMessage: 'Failed to read MiMo service response',
     })
   }
 
-  let data: ChatCompletionResponse
+  let data: MimoChatCompletionResponse
 
   try {
-    data = JSON.parse(rawResponseText) as ChatCompletionResponse
+    data = JSON.parse(rawResponseText) as MimoChatCompletionResponse
   } catch {
     throw createError({
       statusCode: 502,
-      statusMessage: 'AI service returned invalid JSON',
+      statusMessage: 'MiMo service returned invalid JSON',
       data: {
         rawResponse: rawResponseText.slice(0, 300),
       },
     })
   }
 
-  console.log('SPARK PARSED RESPONSE:', data)
+  console.log('MIMO PARSED RESPONSE:', data)
 
   if (!response.ok) {
     throw createError({
       statusCode: response.status,
-      statusMessage: data.error?.message || 'AI service request failed',
+      statusMessage: data.error?.message || 'MiMo service request failed',
     })
   }
 
-  const content = data.choices?.[0]?.message?.content?.trim()
-  console.log('SPARK MESSAGE CONTENT:', content)
+  const firstChoice = data.choices?.[0]
+  const content = firstChoice?.message?.content?.trim()
+  console.log('MIMO MESSAGE CONTENT:', content)
 
   if (!content) {
+    if (firstChoice?.finish_reason === 'length') {
+      throw createError({
+        statusCode: 502,
+        statusMessage: 'MiMo output truncated before final content. Try disabling thinking or increasing max_tokens.',
+      })
+    }
+
     throw createError({
       statusCode: 502,
-      statusMessage: 'AI service returned empty content',
+      statusMessage: 'MiMo returned empty content.',
     })
   }
 
   return content
-}
-
-export const callLLM = async (
-  prompt: string,
-  options: CallSparkModelOptions = {},
-): Promise<string> => {
-  const config = useRuntimeConfig() as unknown as AiRuntimeConfig
-  const provider = config.llmProvider?.trim().toLowerCase() || 'spark'
-
-  if (provider === 'mimo') {
-    return callMimoModel(prompt, options)
-  }
-
-  return callSparkModel(prompt, options)
 }

@@ -40,14 +40,14 @@ const handleRoleChange = (event: Event) => {
         </NuxtLink>
 
         <nav class="hidden items-center gap-6 text-sm text-slate-500 md:flex">
-          <NuxtLink
+          <!-- <NuxtLink
             to="/analyze"
             class="font-semibold text-indigo-600"
           >
             Analysis
-          </NuxtLink>
-          <span>History</span>
-          <span>Practice</span>
+          </NuxtLink> -->
+          <!-- <span>History</span>
+          <span>Practice</span> -->
         </nav>
       </div>
 

@@ -313,6 +313,19 @@ Rules:
 - Do not output markdown or explanations.
 - Do not invent company-specific requirements.
 
+你可以参考以下学习资料（优先使用）：
+Input.retrievedContext
+
+出题规则：
+- 如果 provided input 中的 retrievedContext 存在且不为空，必须基于 retrievedContext 出题。
+- 如果提供了学习资料，question 内容必须和 retrievedContext 相关。
+- 如果提供了学习资料，不允许仅根据 weakSkills 生成通用问题。
+- 每个问题应尽量引用 retrievedContext 中的概念或技术点。
+- answerTips 可以引用 retrievedContext 中的关键概念。
+- 不要编造 retrievedContext 中不存在的概念。
+- 如果问题内容未体现学习资料中的知识点，则该问题视为无效。
+- 只有当 retrievedContext 为空时，才允许按 weakSkills 正常生成题目。
+
 Input:
 ${input}
 `.trim()
