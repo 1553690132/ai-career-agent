@@ -40,6 +40,7 @@ raw input
 → sectionExtractor
 → resumeNormalizer
 → compactResumeText
+```
 
 ---
 
