@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 简历建议列表：展示问题、修改建议和可选改写示例。
 import type { ResumeSuggestion } from '../../../types/analysis'
 
 const props = defineProps<{
@@ -7,6 +8,7 @@ const props = defineProps<{
 </script>
 
 <template>
+  <!-- 老版建议网格组件，用于逐条展示简历优化建议。 -->
   <section>
     <h2 class="mb-3 text-lg font-semibold text-slate-950">简历优化建议</h2>
 

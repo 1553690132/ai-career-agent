@@ -1,10 +1,12 @@
 <script setup lang="ts">
+// 结果页建议区：用卡片展示简历优化建议、优先级和示例改写。
 import type { Priority, ResumeSuggestion } from '../../../types/analysis'
 
 defineProps<{
   resumeSuggestions: ResumeSuggestion[]
 }>()
 
+// 根据建议优先级切换标签颜色，提示用户先处理高优先级项。
 const priorityClassMap: Record<Priority, string> = {
   high: 'bg-rose-50 text-rose-700 ring-rose-100',
   medium: 'bg-amber-50 text-amber-700 ring-amber-100',
@@ -13,6 +15,7 @@ const priorityClassMap: Record<Priority, string> = {
 </script>
 
 <template>
+  <!-- 当前结果页使用的简历建议卡片区。 -->
   <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
     <h2 class="text-xl font-semibold tracking-tight text-slate-950">
       简历优化建议

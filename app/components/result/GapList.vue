@@ -1,10 +1,12 @@
 <script setup lang="ts">
+// 差距列表：展示 AI 识别出的能力缺口及对应优先级。
 import type { GapItem, Priority } from '../../../types/analysis'
 
 const props = defineProps<{
   gaps: GapItem[]
 }>()
 
+// 优先级文案和颜色用于突出最应该先补的差距。
 const priorityLabel: Record<Priority, string> = {
   high: '高优先级',
   medium: '中优先级',
@@ -19,6 +21,7 @@ const priorityClass: Record<Priority, string> = {
 </script>
 
 <template>
+  <!-- 每个 gap 都包含问题描述和可选改进建议。 -->
   <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
     <h2 class="text-lg font-semibold text-slate-950">差距</h2>
 

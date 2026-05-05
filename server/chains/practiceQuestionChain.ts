@@ -11,6 +11,7 @@ import type {
   SkillMatch,
 } from '../../types/analysis'
 
+// practice_question 的输入：retrievedContext 来自内置知识库或用户 Markdown RAG。
 export interface PracticeQuestionChainInput {
   analysisResult: AnalysisResult
   roleType: string
@@ -21,6 +22,8 @@ export type PracticeQuestionChainOutput = PracticeSet
 
 const maxStructuredRetries = 1
 const structuredRetryDelay = 500
+
+// 这些匹配等级会被视为薄弱项，用来生成专项练习题。
 const weakMatchLevels = ['weak', 'missing', 'partial']
 
 const delay = (milliseconds: number) =>
@@ -33,6 +36,7 @@ const isStructuredOutputError = (error: unknown) =>
 
 const normalizeSkill = (skill: string) => skill.trim()
 
+// 追加不重复的技能名，并限制弱项数量。
 const appendUnique = (items: string[], item: string, limit: number) => {
   const normalized = normalizeSkill(item)
 
@@ -43,6 +47,7 @@ const appendUnique = (items: string[], item: string, limit: number) => {
   items.push(normalized)
 }
 
+// 从 gaps 和 skillMatches 中抽取最值得练习的薄弱技能。
 export const extractWeakSkills = (analysisResult: AnalysisResult, limit = 6): string[] => {
   const weakSkills: string[] = []
 
@@ -62,6 +67,7 @@ export const extractWeakSkills = (analysisResult: AnalysisResult, limit = 6): st
   return weakSkills.slice(0, limit)
 }
 
+// 生成出题 prompt 的压缩输入，包含弱项、gap、技能证据和 RAG 上下文。
 const createPracticeInput = (
   analysisResult: AnalysisResult,
   roleType: string,
@@ -96,6 +102,7 @@ const createPracticeInput = (
   }
 }
 
+// 练习题 fallback：当 LLM 出题失败时，基于弱项生成一套可用的本地题。
 export const createFallbackPracticeSet = (
   analysisResult: AnalysisResult,
   roleType: string,
@@ -129,9 +136,11 @@ export const createFallbackPracticeSet = (
   }
 }
 
+// 练习题生成 chain：把分析结果和检索上下文转成 PracticeSet。
 export const practiceQuestionChain = {
   async invoke(input: PracticeQuestionChainInput): Promise<PracticeQuestionChainOutput> {
     console.log('[Chain] practice_question start')
+    // 先从分析结果中提取薄弱项，作为出题的主线。
     const weakSkills = extractWeakSkills(input.analysisResult)
     const practiceInput = createPracticeInput(
       input.analysisResult,
@@ -155,6 +164,7 @@ export const practiceQuestionChain = {
         })
         outputLength = content.length
         errorStage = 'parse'
+        // 解析并校验题集结构，避免前端练习页拿到不可渲染的数据。
         const practiceJson = parseAiJsonResponse<PracticeQuestionChainOutput>(content)
         errorStage = 'validate'
         validatePracticeSet(practiceJson)
@@ -168,6 +178,7 @@ export const practiceQuestionChain = {
           usedFallback: false,
         })
         console.log('[Chain] practice_question success')
+        // 限制最多 6 个弱项和 6 道题。
         return {
           ...practiceJson,
           roleType: practiceJson.roleType || input.roleType,

@@ -1,3 +1,4 @@
+// 所有结构化输出链共用的硬性 JSON 规则，降低模型输出 Markdown 或多余字段的概率。
 const strictJsonInstruction = `
 STRICT JSON OUTPUT RULES:
 - Return exactly one complete JSON object.
@@ -11,6 +12,7 @@ STRICT JSON OUTPUT RULES:
 - Do not output English unless it is a technical keyword (e.g. Vue, TypeScript).
 `.trim()
 
+// 中文输出约束会拼进每个 prompt，确保最终给用户看的建议尽量保持中文。
 const chineseOutputInstruction = `
 IMPORTANT:
 - 所有字段内容必须使用中文表达。
@@ -20,6 +22,7 @@ IMPORTANT:
 - 不允许输出 "You should..." 这类英文建议。
 `.trim()
 
+// 简历抽取 prompt：把原始简历文本压缩成后续分析可用的标准 resume JSON。
 export const createResumeExtractPrompt = (resumeText: string, roleType: string) => `
 ${chineseOutputInstruction}
 
@@ -56,6 +59,7 @@ Resume:
 ${resumeText}
 `.trim()
 
+// JD 抽取 prompt：把岗位描述整理成职责、技能、年限等结构化字段。
 export const createJobExtractPrompt = (jobText: string, roleType: string) => `
 ${chineseOutputInstruction}
 
@@ -88,6 +92,7 @@ JD:
 ${jobText}
 `.trim()
 
+// 旧版一体化分析 prompt：一次性生成评分、匹配、差距、简历建议和面试题。
 export const createAnalysisPrompt = (analysisInput: string, roleType: string) => `
 ${chineseOutputInstruction}
 
@@ -130,6 +135,7 @@ Input:
 ${analysisInput}
 `.trim()
 
+// 分数链 prompt：只负责匹配评分相关结果，方便和建议链拆开处理。
 export const createAnalysisScorePrompt = (analysisInput: string, roleType: string) => `
 ${chineseOutputInstruction}
 
@@ -171,6 +177,7 @@ Input:
 ${analysisInput}
 `.trim()
 
+// 建议链 prompt：基于评分摘要继续生成简历优化建议和面试题。
 export const createAnalysisAdvicePrompt = (
   adviceInput: string,
   roleType: string,
@@ -202,6 +209,7 @@ Input:
 ${adviceInput}
 `.trim()
 
+// 无 JD 简历诊断的评分 prompt：按目标岗位的通用要求评估简历。
 export const createResumeReviewScorePrompt = (resumeJson: string, roleType: string) => `
 ${chineseOutputInstruction}
 
@@ -247,6 +255,7 @@ Resume JSON:
 ${resumeJson}
 `.trim()
 
+// 无 JD 简历诊断的建议 prompt：根据简历和评分摘要给优化建议与面试题。
 export const createResumeReviewAdvicePrompt = (
   resumeJson: string,
   roleType: string,
@@ -280,6 +289,7 @@ Score summary:
 ${scoreSummary}
 `.trim()
 
+// 练习题 prompt：根据薄弱技能和 RAG 检索上下文生成针对性的练习问题。
 export const createPracticeQuestionPrompt = (input: string) => `
 ${chineseOutputInstruction}
 

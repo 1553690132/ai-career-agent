@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 结果页：读取分析结果、展示报告、导出报告，并生成下一步练习题。
 import { mockAnalysisResult } from '../../mocks/analysis.mock'
 import BigPicture from '../components/result/BigPicture.vue'
 import BreakdownSummary from '../components/result/BreakdownSummary.vue'
@@ -9,7 +10,10 @@ import SuggestionSection from '../components/result/SuggestionSection.vue'
 import type { AnalysisResult, PracticeSet } from '../../types/analysis'
 import { downloadMarkdown, downloadResultPdf } from '../../utils/exportReport'
 
+// 默认使用 mock 数据兜底，真实分析完成后会被 sessionStorage 中的结果覆盖。
 const analysisResult = ref<AnalysisResult>(mockAnalysisResult)
+
+// 页面异步操作状态：分别控制 PDF 导出和练习题生成。
 const isExportingPdf = ref(false)
 const isGeneratingPractice = ref(false)
 const pdfErrorMessage = ref('')
@@ -18,6 +22,7 @@ const router = useRouter()
 const appContext = useAppContext()
 
 onMounted(() => {
+  // 从分析页保存的 sessionStorage 中恢复本次分析结果。
   const storedResult = appContext.getAnalysisResult()
 
   if (storedResult) {
@@ -25,10 +30,12 @@ onMounted(() => {
   }
 })
 
+// 导出 Markdown 报告，逻辑封装在 utils/exportReport.ts。
 const handleDownloadMarkdown = () => {
   downloadMarkdown(analysisResult.value)
 }
 
+// 导出 PDF 报告；失败时只影响导出，不影响页面报告展示。
 const handleDownloadPdf = async () => {
   if (isExportingPdf.value) {
     return
@@ -46,6 +53,7 @@ const handleDownloadPdf = async () => {
   }
 }
 
+// 基于当前分析结果生成专项练习题，然后进入 /practice。
 const handleGoPractice = async () => {
   if (isGeneratingPractice.value) {
     return
@@ -55,6 +63,7 @@ const handleGoPractice = async () => {
     isGeneratingPractice.value = true
     practiceErrorMessage.value = ''
     const result = analysisResult.value
+    // 不上传 mdFile 时，后端会结合内置知识库检索上下文后生成题目。
     const practiceSet = await $fetch<PracticeSet>('/api/practice/generate', {
       method: 'POST',
       body: {
@@ -63,6 +72,7 @@ const handleGoPractice = async () => {
       },
     })
 
+    // 练习题同样存入 sessionStorage，练习页直接读取。
     appContext.savePracticeSet(practiceSet, { source: 'base' })
     await router.push('/practice')
   } catch (error: unknown) {
@@ -75,10 +85,12 @@ const handleGoPractice = async () => {
 </script>
 
 <template>
+  <!-- 结果页主界面：顶部操作栏 + 报告主体 + 进入练习按钮。 -->
   <div class="min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-white text-slate-900">
     <AppHeader action="reanalyze" />
 
     <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-2">
+      <!-- 报告操作栏：下载 Markdown/PDF，并提示用户可进入专项练习。 -->
       <section
         class="mb-4 flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-white/80 p-3 shadow-sm shadow-indigo-100/50 backdrop-blur sm:flex-row sm:items-center sm:justify-between"
       >
@@ -123,6 +135,7 @@ const handleGoPractice = async () => {
         {{ practiceErrorMessage }}
       </p>
 
+      <!-- 报告主体：由多个结果组件组合展示完整 AnalysisResult。 -->
       <div
         id="analysis-report"
         class="flex flex-col gap-5 rounded-[2rem] bg-gradient-to-b from-white via-indigo-50/20 to-white p-1"
@@ -160,6 +173,7 @@ const handleGoPractice = async () => {
         </section>
       </div>
 
+      <!-- 页面底部的第二个练习入口，方便用户读完报告后继续。 -->
       <section class="flex w-full justify-center py-3">
         <button
           type="button"

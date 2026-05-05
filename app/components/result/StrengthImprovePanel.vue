@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 优势/提升点双栏：把结果里的 strengths 和 gaps 压缩成可行动摘要。
 import type { GapItem } from '../../../types/analysis'
 
 defineProps<{
@@ -8,6 +9,7 @@ defineProps<{
 </script>
 
 <template>
+  <!-- 左侧列出主要优势，右侧列出优先提升点。 -->
   <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
     <article class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-emerald-100">
       <h2 class="flex items-center gap-2 text-xl font-semibold text-slate-950">

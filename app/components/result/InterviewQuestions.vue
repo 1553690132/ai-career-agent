@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 面试题完整列表：展示问题、难度和考察意图。
 import type { InterviewQuestion } from '../../../types/analysis'
 
 const props = defineProps<{
@@ -7,6 +8,7 @@ const props = defineProps<{
 </script>
 
 <template>
+  <!-- 老版面试题列表组件，保留给较完整的报告布局复用。 -->
   <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
     <h2 class="text-lg font-semibold text-slate-950">面试题预测</h2>
 

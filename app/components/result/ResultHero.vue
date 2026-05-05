@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 结果页头图：突出整体匹配分和推荐结论，并提供重新分析/进入练习的入口。
 import type { AnalysisResult } from '../../../types/analysis'
 
 type Recommendation = AnalysisResult['recommendation']
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   practice: []
 }>()
 
+// 将推荐枚举映射为英文展示标题，保持结果页头部简洁。
 const recommendationTitleMap: Record<Recommendation, string> = {
   highly_recommended: 'Strong Candidate Match',
   recommended: 'Good Candidate Match',
@@ -26,6 +28,7 @@ const recommendationTitle = computed(() => recommendationTitleMap[props.recommen
 </script>
 
 <template>
+  <!-- 报告首屏：左侧大分数，右侧总结和下一步操作。 -->
   <section class="overflow-hidden rounded-2xl bg-white shadow-md shadow-indigo-100/70 ring-1 ring-indigo-100">
     <div class="grid grid-cols-1 gap-0 md:grid-cols-[0.42fr_0.58fr]">
       <div class="flex items-center justify-center bg-gradient-to-br from-indigo-50 via-violet-50 to-white px-6 py-7 md:py-8">

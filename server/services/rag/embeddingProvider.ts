@@ -1,5 +1,6 @@
 import { Embeddings } from '@langchain/core/embeddings'
 
+// embedding provider 支持本地 hash 兜底和外部 API 两种模式。
 export type EmbeddingProvider = 'local-hash' | 'api'
 
 interface EmbeddingRuntimeConfig {
@@ -20,6 +21,7 @@ interface EmbeddingApiResponse {
 
 const embeddingDimension = 384
 
+// 默认使用 local-hash。
 const normalizeProvider = (provider?: string): EmbeddingProvider => {
   if (provider === 'api' || provider === 'local-hash') {
     return provider
@@ -46,6 +48,7 @@ const getErrorMessage = (error: unknown) => {
   return String(error)
 }
 
+// 简易 tokenizer：同时支持英文技术词和中文短词。
 const tokenize = (text: string) => {
   const normalizedText = text.toLowerCase()
   const tokens = normalizedText.match(/[a-z0-9+#.]+|[\u4e00-\u9fa5]{1,2}/g)
@@ -53,6 +56,7 @@ const tokenize = (text: string) => {
   return tokens ?? []
 }
 
+// 把 token 映射到固定维度向量槽位。同一个 token 永远得到同一个数字,不同 token 大概率得到不同数字
 const hashToken = (token: string) => {
   let hash = 2166136261
 
@@ -64,6 +68,7 @@ const hashToken = (token: string) => {
   return hash >>> 0
 }
 
+// 向量归一化，便于相似度检索时比较方向而不是长度,防止长文本因为词多而被理解为相似度高。
 const normalizeVector = (vector: number[]) => {
   const norm = Math.sqrt(vector.reduce((total, value) => total + value * value, 0))
 
@@ -74,6 +79,7 @@ const normalizeVector = (vector: number[]) => {
   return vector.map((value) => value / norm)
 }
 
+// 本地 hash embedding。
 export class LocalHashEmbeddings extends Embeddings {
   constructor() {
     super({})
@@ -87,6 +93,7 @@ export class LocalHashEmbeddings extends Embeddings {
     return this.embedText(text)
   }
 
+  // 将 token hash 到固定维度向量，并用正负号降低碰撞偏差。
   private embedText(text: string) {
     const vector = Array.from({ length: embeddingDimension }, () => 0)
     const tokens = tokenize(text)
@@ -102,6 +109,7 @@ export class LocalHashEmbeddings extends Embeddings {
   }
 }
 
+// 外部 embedding API provider；失败时自动回退到 LocalHashEmbeddings。
 class ApiEmbeddings extends Embeddings {
   private readonly fallback = new LocalHashEmbeddings()
 
@@ -137,6 +145,7 @@ class ApiEmbeddings extends Embeddings {
     }
   }
 
+  // 调用兼容 OpenAI embeddings 格式的 API。
   private async callEmbeddingApi(input: string[]): Promise<number[][]> {
     if (!this.apiKey || !this.baseURL || !this.model) {
       throw new Error('Embedding API config is incomplete')
@@ -191,6 +200,7 @@ class ApiEmbeddings extends Embeddings {
   }
 }
 
+// 根据 runtimeConfig 创建 embedding provider。
 export const createEmbeddingProvider = (): Embeddings => {
   const config = useRuntimeConfig() as unknown as EmbeddingRuntimeConfig
   const provider = normalizeProvider(config.embeddingProvider?.trim())

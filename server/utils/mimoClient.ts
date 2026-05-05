@@ -1,11 +1,13 @@
 import { createError } from 'h3'
 
 interface MimoRuntimeConfig {
+  // MiMo 独立配置，只有 llmProvider=mimo 时才会被 aiClient 调用。
   mimoApiKey?: string
   mimoBaseURL?: string
   mimoModel?: string
 }
 
+// MiMo 的 chat/completions 请求体，保留 enable_thinking 开关以避免输出被思考过程占满。
 interface MimoChatCompletionRequest {
   model: string
   messages: Array<{
@@ -25,6 +27,7 @@ interface CallMimoModelOptions {
 }
 
 interface MimoChatCompletionResponse {
+  // 只声明业务关心的字段：首个 choice 的文本、结束原因和错误信息。
   choices?: Array<{
     finish_reason?: string | null
     message?: {
@@ -37,10 +40,12 @@ interface MimoChatCompletionResponse {
 }
 
 const getChatCompletionsUrl = (baseURL: string) => {
+  // 兼容用户在环境变量中配置带斜杠或不带斜杠的 baseURL。
   const normalizedBaseURL = baseURL.replace(/\/+$/, '')
   return `${normalizedBaseURL}/chat/completions`
 }
 
+// 调用 MiMo 模型并返回第一条回复文本。
 export const callMimoModel = async (
   prompt: string,
   options: CallMimoModelOptions = {},
@@ -50,6 +55,7 @@ export const callMimoModel = async (
   const baseURL = config.mimoBaseURL?.trim()
   const model = config.mimoModel?.trim()
 
+  // 配置错误在服务端直接暴露为 500，便于部署阶段发现问题。
   if (!apiKey) {
     throw createError({
       statusCode: 500,
@@ -89,6 +95,7 @@ export const callMimoModel = async (
     requestBody.max_tokens = options.maxTokens
   }
 
+  // 请求失败说明上游服务不可达，统一转成 502。
   let response: Response
 
   try {
@@ -109,6 +116,7 @@ export const callMimoModel = async (
 
   let rawResponseText = ''
 
+  // 先拿原始响应文本，后面解析失败时可以截断后带入错误 data。
   try {
     rawResponseText = await response.text()
     console.log('MIMO RAW RESPONSE:', rawResponseText)
@@ -121,6 +129,7 @@ export const callMimoModel = async (
 
   let data: MimoChatCompletionResponse
 
+  // MiMo 正常响应应为 JSON；非 JSON 响应用专门错误提示区分。
   try {
     data = JSON.parse(rawResponseText) as MimoChatCompletionResponse
   } catch {
@@ -146,6 +155,7 @@ export const callMimoModel = async (
   const content = firstChoice?.message?.content?.trim()
   console.log('MIMO MESSAGE CONTENT:', content)
 
+  // 如果因为长度截断导致没有最终内容，给出更具体的排查建议。
   if (!content) {
     if (firstChoice?.finish_reason === 'length') {
       throw createError({

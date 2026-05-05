@@ -28,16 +28,19 @@ export type AiWorkflowStep =
   | 'resume_review_advice'
 export type AnalysisWorkflowStage = 'resume' | 'job' | 'analysis'
 
+
 export interface AnalysisWorkflowInput {
   resumeText: string
   jobText?: string
   roleType?: string
 }
 
+
 export interface AnalysisWorkflowMetrics {
   totalDuration: number
 }
 
+// workflow 返回显式 success/false，便于 API 层决定是否进入 fallback。
 export type AnalysisWorkflowResult =
   | {
       success: true
@@ -54,6 +57,7 @@ export type AnalysisWorkflowResult =
       stage: AnalysisWorkflowStage
     }
 
+// 对外暴露的步骤错误：保留失败 step 和原始错误，方便 API 层分类处理。
 export class AiWorkflowStepError extends Error {
   constructor(
     public readonly step: AiWorkflowStep,
@@ -64,15 +68,18 @@ export class AiWorkflowStepError extends Error {
   }
 }
 
+// 对 LLM 输出的字符串数组做裁剪和去空，避免结果页展示过长。
 const normalizeStringList = (value: string[] | undefined, limit: number): string[] =>
   (value ?? [])
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, limit)
 
+// LLM 未识别资历等级时统一归为 unknown。
 const normalizeSeniorityLevel = (value: SeniorityLevel | undefined): SeniorityLevel =>
   value ?? 'unknown'
 
+// 从技能名称粗略推断分类，补齐抽取 chain 中只返回字符串技能的缺口。
 const inferSkillCategory = (name: string): SkillCategory => {
   const normalizedName = name.toLowerCase()
 
@@ -95,12 +102,14 @@ const inferSkillCategory = (name: string): SkillCategory => {
   return 'other'
 }
 
+// 将字符串技能列表转换成前端统一使用的 SkillItem。
 const createSkillItems = (skills: string[] | undefined, limit: number): SkillItem[] =>
   normalizeStringList(skills, limit).map((name) => ({
     name,
     category: inferSkillCategory(name),
   }))
 
+// 将 resume_extract 的轻量 JSON 归一化成完整 ResumeProfile。
 const normalizeResumeProfile = (resume: ResumeJson): ResumeProfile => ({
   name: resume.name ?? '',
   headline: resume.headline ?? '',
@@ -121,6 +130,7 @@ const normalizeResumeProfile = (resume: ResumeJson): ResumeProfile => ({
   })),
 })
 
+// 将 job_extract 的轻量 JSON 归一化成完整 JobProfile。
 const normalizeJobProfile = (job: JobJson): JobProfile => ({
   title: job.title ?? '',
   company: job.company ?? '',
@@ -134,6 +144,7 @@ const normalizeJobProfile = (job: JobJson): JobProfile => ({
   keywords: normalizeStringList(job.keywords, 10),
 })
 
+// 没有 JD 时创建默认岗位画像，让结果页仍然能展示 job 区块。
 const createDefaultJobProfile = (roleType: string): JobProfile => ({
   title: roleType,
   company: '',
@@ -156,6 +167,7 @@ const logStepFail = (step: AiWorkflowStep, error: unknown) => {
   console.error(`[ai_workflow] ${step} fail: ${getErrorMessage(error)}`)
 }
 
+// 将 workflow 阶段映射到具体 step 名，供错误对象使用。
 const toWorkflowStep = (stage: AnalysisWorkflowStage): AiWorkflowStep => {
   if (stage === 'resume') {
     return 'resume_extract'
@@ -174,6 +186,7 @@ const createStepError = (
 ): AiWorkflowStepError =>
   new AiWorkflowStepError(toWorkflowStep(stage), `${stage} workflow stage failed`, sourceError)
 
+// 实际主流程调度器：在服务端内部串联多个 chain，而不是让前端逐个调用接口。
 export async function runAnalysisWorkflow(
   input: AnalysisWorkflowInput,
 ): Promise<AnalysisWorkflowResult> {
@@ -190,6 +203,7 @@ export async function runAnalysisWorkflow(
     let resume: ResumeProfile
 
     try {
+      // 抽取简历画像
       failedStage = 'resume'
       resumeJson = await resumeExtractChain.invoke({
         resumeText: input.resumeText,
@@ -209,6 +223,7 @@ export async function runAnalysisWorkflow(
     let job: JobProfile
 
     if (hasValidJobText) {
+      // 有 JD 时抽取岗位画像，然后进入岗位匹配模式
       let jobJson: JobExtractChainOutput
 
       try {
@@ -228,11 +243,13 @@ export async function runAnalysisWorkflow(
         }
       }
     } else {
+      // 没有 JD 时跳过 job_extract，进入通用简历体检模式。
       job = createDefaultJobProfile(roleType)
       console.log('[Workflow] job_extract skipped: no JD provided')
     }
 
     try {
+      // 先评分，再把评分摘要交给 advice chain 生成建议和面试题。
       failedStage = 'analysis'
       const scoreAnalysis = hasValidJobText
         ? await analysisScoreChain.invoke({
@@ -260,6 +277,7 @@ export async function runAnalysisWorkflow(
           })
       console.log(hasValidJobText ? '[Workflow] analysis_advice done' : '[Workflow] resume_review_advice done')
 
+      // score/advice 两段结果合并成 AnalysisResult 中除 resume/job 外的分析主体。
       const analysis = {
         ...scoreAnalysis,
         ...adviceAnalysis,
@@ -302,6 +320,7 @@ export async function runAnalysisWorkflow(
   }
 }
 
+// 分段接口resume
 export const extractResumeProfile = async (
   resumeText: string,
   roleType: string,
@@ -321,6 +340,7 @@ export const extractResumeProfile = async (
   }
 }
 
+// 分段接口job
 export const extractJobProfile = async (
   jobText: string,
   roleType: string,
@@ -340,6 +360,7 @@ export const extractJobProfile = async (
   }
 }
 
+// 分段接口match
 export const analyzeMatch = async (
   resume: ResumeProfile,
   job: JobProfile,
@@ -375,6 +396,7 @@ export const analyzeMatch = async (
   }
 }
 
+// API 主入口使用的方法：失败时抛出 AiWorkflowStepError，成功时返回完整 AnalysisResult。
 export const runFullAnalysis = async (
   resumeText: string,
   jobText: string | undefined,

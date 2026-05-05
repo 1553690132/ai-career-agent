@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 评分卡网格：按多个维度展示分数、进度条和说明。
 import type { ScoreCard } from '../../../types/analysis'
 
 const props = defineProps<{
@@ -7,6 +8,7 @@ const props = defineProps<{
 </script>
 
 <template>
+  <!-- 每个评分卡对应一个分析维度，例如技能、项目表达或关键词覆盖。 -->
   <section>
     <h2 class="mb-3 text-lg font-semibold text-slate-950">评分卡</h2>
 

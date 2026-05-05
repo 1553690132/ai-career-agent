@@ -1,5 +1,6 @@
 import type { AnalysisResult } from '../types/analysis'
 
+// 将任意值安全转成字符串，避免导出报告时出现 null/undefined。
 const safeText = (value: unknown): string => {
   if (value === null || value === undefined) {
     return ''
@@ -8,10 +9,12 @@ const safeText = (value: unknown): string => {
   return String(value)
 }
 
+// 将可选数组统一收敛为数组，减少后续导出逻辑里的空值判断。
 const safeArray = <T>(value: T[] | undefined): T[] => {
   return Array.isArray(value) ? value : []
 }
 
+// 把字符串数组转换成 Markdown 列表。
 const toBulletList = (items: string[] | undefined): string => {
   const values = safeArray(items).map((item) => safeText(item)).filter(Boolean)
 
@@ -22,11 +25,14 @@ const toBulletList = (items: string[] | undefined): string => {
   return values.map((item) => `- ${item}`).join('\n')
 }
 
+// 生成 Markdown 二级标题区块。
 const section = (title: string, content: string): string => {
   return `\n## ${title}\n\n${content || ''}\n`
 }
 
+// 将 AnalysisResult 拼装成完整 Markdown 报告文本。
 export function buildReportMarkdown(result: AnalysisResult): string {
+  // 评分卡区块：展示每个维度的分数和摘要。
   const scoreCards = safeArray(result.scoreCards)
     .map((card, index) => {
       return [
@@ -37,6 +43,7 @@ export function buildReportMarkdown(result: AnalysisResult): string {
     })
     .join('\n\n')
 
+  // 技能匹配区块：展示技能分类、匹配等级、分数和证据。
   const skillMatches = safeArray(result.skillMatches)
     .map((skill, index) => {
       return [
@@ -50,6 +57,7 @@ export function buildReportMarkdown(result: AnalysisResult): string {
     })
     .join('\n\n')
 
+  // 差距分析区块：展示优先级、问题描述、建议和相关技能。
   const gaps = safeArray(result.gaps)
     .map((gap, index) => {
       return [
@@ -62,6 +70,7 @@ export function buildReportMarkdown(result: AnalysisResult): string {
     })
     .join('\n\n')
 
+  // 简历建议区块：展示问题、优化建议、示例改写和关键词。
   const resumeSuggestions = safeArray(result.resumeSuggestions)
     .map((suggestion, index) => {
       return [
@@ -76,6 +85,7 @@ export function buildReportMarkdown(result: AnalysisResult): string {
     })
     .join('\n\n')
 
+  // 面试题区块：展示预测题、考察意图和建议答题点。
   const interviewQuestions = safeArray(result.interviewQuestions)
     .map((question, index) => {
       return [
@@ -91,6 +101,7 @@ export function buildReportMarkdown(result: AnalysisResult): string {
 
   const generatedAt = safeText(result.generatedAt || new Date().toISOString())
 
+  // 合并所有章节，并压缩多余空行，保证导出的 Markdown 更干净。
   return [
     '# AI 求职匹配分析报告',
     '',
@@ -111,6 +122,7 @@ export function buildReportMarkdown(result: AnalysisResult): string {
     .concat('\n')
 }
 
+// 在浏览器端触发 Markdown 文件下载。
 export function downloadMarkdown(result: AnalysisResult): void {
   if (typeof window === 'undefined') {
     return
@@ -129,6 +141,7 @@ export function downloadMarkdown(result: AnalysisResult): void {
   URL.revokeObjectURL(url)
 }
 
+// 分析推荐枚举到 PDF 展示文案的映射。
 const recommendationTextMap: Record<AnalysisResult['recommendation'], string> = {
   highly_recommended: '强匹配候选人',
   recommended: '良好匹配候选人',
@@ -136,8 +149,10 @@ const recommendationTextMap: Record<AnalysisResult['recommendation'], string> = 
   not_recommended: '匹配度较低',
 }
 
+// jsPDF 类型需要动态 import 推导，避免把 PDF 依赖提前打进首屏逻辑。
 type PdfDocument = InstanceType<typeof import('jspdf').jsPDF>
 
+// PDF 统一色板，后续绘制文字、边框、卡片背景时复用。
 const pdfColors = {
   primary: [79, 70, 229],
   text: [17, 24, 39],
@@ -151,6 +166,7 @@ const pdfColors = {
 
 type PdfColor = readonly [number, number, number]
 
+// jsPDF 注册字体需要 base64 字符串，这里把字体 ArrayBuffer 转换过去。
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = ''
   const bytes = new Uint8Array(buffer)
@@ -162,6 +178,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary)
 }
 
+// 加载 public/fonts 下的中文字体，保证 PDF 中文内容可以正常显示。
 async function loadChineseFont(doc: PdfDocument): Promise<void> {
   const response = await fetch('/fonts/NotoSansSC-Regular.ttf')
 
@@ -177,18 +194,22 @@ async function loadChineseFont(doc: PdfDocument): Promise<void> {
   doc.setFont('NotoSansSC', 'normal')
 }
 
+// 设置 PDF 文字颜色。
 const setPdfTextColor = (pdf: PdfDocument, color: PdfColor) => {
   pdf.setTextColor(color[0], color[1], color[2])
 }
 
+// 设置 PDF 填充颜色。
 const setPdfFillColor = (pdf: PdfDocument, color: PdfColor) => {
   pdf.setFillColor(color[0], color[1], color[2])
 }
 
+// 设置 PDF 线条颜色。
 const setPdfDrawColor = (pdf: PdfDocument, color: PdfColor) => {
   pdf.setDrawColor(color[0], color[1], color[2])
 }
 
+// 写入自动换行文本，并返回下一段内容应该开始的 y 坐标。
 const addWrappedText = (
   pdf: PdfDocument,
   text: string,
@@ -202,6 +223,7 @@ const addWrappedText = (
   return y + lines.length * lineHeight
 }
 
+// 绘制 PDF 中的章节标题和短下划线。
 const addSectionTitle = (pdf: PdfDocument, title: string, x: number, y: number): number => {
   pdf.setFont('NotoSansSC', 'normal')
   pdf.setFontSize(17)
@@ -213,6 +235,7 @@ const addSectionTitle = (pdf: PdfDocument, title: string, x: number, y: number):
   return y + 13
 }
 
+// 绘制一张小卡片，主要用于首页评分维度摘要。
 const addSmallCard = (
   pdf: PdfDocument,
   title: string,
@@ -244,6 +267,7 @@ const addSmallCard = (
   addWrappedText(pdf, body, x + 5, y + 18, width - 10, 4.5)
 }
 
+// 绘制带圆点的文本列表，返回列表结束后的 y 坐标。
 const addBulletList = (
   pdf: PdfDocument,
   items: string[],
@@ -266,6 +290,7 @@ const addBulletList = (
   return cursorY
 }
 
+// PDF 页脚，展示产品名和页码。
 const addFooter = (pdf: PdfDocument, pageNumber: number) => {
   pdf.setFont('NotoSansSC', 'normal')
   pdf.setFontSize(8)
@@ -273,11 +298,13 @@ const addFooter = (pdf: PdfDocument, pageNumber: number) => {
   pdf.text(`ResumeFlow AI · 第 ${pageNumber} 页`, 20, 286)
 }
 
+// 在浏览器端生成并下载 PDF 报告。
 export async function downloadResultPdf(result: AnalysisResult): Promise<void> {
   const runtimeProcess = typeof process === 'undefined'
     ? undefined
     : (process as NodeJS.Process & { client?: boolean })
 
+  // 服务端渲染阶段不能访问 window/document，也不能触发下载。
   if (runtimeProcess?.client === false) {
     return
   }
@@ -286,6 +313,7 @@ export async function downloadResultPdf(result: AnalysisResult): Promise<void> {
     return
   }
 
+  // 动态加载 jsPDF，让普通页面渲染时不必提前加载 PDF 依赖。
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF('p', 'mm', 'a4')
   await loadChineseFont(pdf)
@@ -333,6 +361,7 @@ export async function downloadResultPdf(result: AnalysisResult): Promise<void> {
   let cardY = 132
   const cardWidth = 80
   const cardHeight = 38
+  // 首页最多展示 4 个评分卡，使用两列布局。
   safeArray(result.scoreCards).slice(0, 4).forEach((card, index) => {
     const x = marginX + (index % 2) * (cardWidth + 10)
     const y = cardY + Math.floor(index / 2) * (cardHeight + 10)
@@ -437,5 +466,6 @@ export async function downloadResultPdf(result: AnalysisResult): Promise<void> {
   })
   addFooter(pdf, 3)
 
+  // 触发浏览器下载。
   pdf.save('resume-analysis-report.pdf')
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 顶部全局导航栏
 type RoleType = 'frontend' | 'backend' | 'product' | 'algorithm'
 type HeaderAction = 'role' | 'reanalyze'
 
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   'update:roleType': [value: RoleType]
 }>()
 
+// 将岗位下拉框的 DOM change 事件转换成父组件使用的 v-model 更新事件。
 const handleRoleChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
   emit('update:roleType', target.value as RoleType)

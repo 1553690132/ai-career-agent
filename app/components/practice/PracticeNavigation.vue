@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 练习题导航：控制上一题/下一题按钮状态，并向父页面派发翻页事件。
 const props = defineProps<{
   currentIndex: number
   total: number
@@ -10,6 +11,7 @@ const emit = defineEmits<{
   next: []
 }>()
 
+// 根据当前题号和禁用状态，统一计算按钮是否可点。
 const isFirst = computed(() => props.currentIndex <= 0)
 const isLast = computed(() => props.currentIndex >= props.total - 1)
 const isPreviousDisabled = computed(() => props.disabled || isFirst.value)
@@ -17,6 +19,7 @@ const isNextDisabled = computed(() => props.disabled || isLast.value)
 </script>
 
 <template>
+  <!-- 题目分页控制区：中间展示当前进度，两侧负责切换题目。 -->
   <nav class="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-indigo-100 sm:flex-row sm:items-center sm:justify-between">
     <button
       type="button"

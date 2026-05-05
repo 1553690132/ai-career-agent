@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 练习页：读取练习题集、支持逐题练习，并可上传 Markdown 资料重新生成 RAG 增强题。
 import PracticeHeader from '../components/practice/PracticeHeader.vue'
 import PracticeNavigation from '../components/practice/PracticeNavigation.vue'
 import PracticeQuestionCard from '../components/practice/PracticeQuestionCard.vue'
@@ -22,11 +23,17 @@ interface MarkdownUploadPayload {
 type PracticeSource = 'base' | 'rag'
 
 const route = useRoute()
+
+// 当前练习题集和题号状态。
 const practiceSet = ref<PracticeSet | null>(null)
 const currentIndex = ref(0)
 const practiceVersion = ref(0)
+
+// 题目来源状态：base 表示默认生成，rag 表示结合用户上传 Markdown 资料生成。
 const practiceSource = ref<PracticeSource>('base')
 const mdSourceFileName = ref('')
+
+// 页面加载、生成中和错误状态。
 const isLoading = ref(true)
 const isGeneratingRagQuestions = ref(false)
 const errorMessage = ref('')
@@ -34,14 +41,19 @@ const mdErrorMessage = ref('')
 const mdFile = ref<File | null>(null)
 const appContext = useAppContext()
 
+// 当前题目由题集和 currentIndex 推导得到。
 const currentQuestion = computed(() => practiceSet.value?.questions[currentIndex.value])
+
+// 用 key 强制题卡在切题或重新生成后重置内部展开状态。
 const questionRenderKey = computed(() =>
   currentQuestion.value ? `${practiceVersion.value}-${currentQuestion.value.id}` : `${practiceVersion.value}-empty`,
 )
+// 展示当前题目来源，区分普通练习和资料增强练习。
 const sourceLabel = computed(() =>
   practiceSource.value === 'rag' ? '资料增强练习' : '基础练习题',
 )
 
+// 将后端校验错误或生成失败错误整理成页面提示文案。
 const getApiErrorMessage = (error: unknown) => {
   if (!error || typeof error !== 'object') {
     return '练习题生成失败，请稍后重试'
@@ -59,8 +71,10 @@ const getApiErrorMessage = (error: unknown) => {
     ?? '练习题生成失败，请稍后重试'
 }
 
+// RAG 重新生成需要基于原始分析结果里的 gaps 和 skillMatches。
 const readAnalysisResult = () => appContext.getAnalysisResult()
 
+// 将 Markdown 文件转成后端 API 接受的 JSON 结构。
 const readFileBytes = async (file: File) => Array.from(new Uint8Array(await file.arrayBuffer()))
 
 const createMarkdownPayload = async (file: File): Promise<MarkdownUploadPayload> => ({
@@ -69,12 +83,14 @@ const createMarkdownPayload = async (file: File): Promise<MarkdownUploadPayload>
   bytes: await readFileBytes(file),
 })
 
+// 优先使用路由参数，其次沿用题集或分析结果中的岗位信息。
 const getRoleType = (analysisResult: AnalysisResult) =>
   route.query.roleType?.toString()
   || practiceSet.value?.roleType
   || analysisResult.job?.title
   || 'frontend'
 
+// 替换整套题目，并同步到 sessionStorage，保证刷新后仍能恢复。
 const replacePracticeSet = (nextPracticeSet: PracticeSet, source: PracticeSource, fileName = '') => {
   practiceSet.value = nextPracticeSet
   currentIndex.value = 0
@@ -89,6 +105,7 @@ const replacePracticeSet = (nextPracticeSet: PracticeSet, source: PracticeSource
   })
 }
 
+// 上传 Markdown 资料后，请求后端进行切块、检索和题目重生成。
 const requestPracticeSet = async (analysisResult: AnalysisResult, selectedMdFile: File) => {
   const generatedPracticeSet = await $fetch<PracticeSet>('/api/practice/generate', {
     method: 'POST',
@@ -102,6 +119,7 @@ const requestPracticeSet = async (analysisResult: AnalysisResult, selectedMdFile
   replacePracticeSet(generatedPracticeSet, 'rag', selectedMdFile.name)
 }
 
+// 页面进入时从 sessionStorage 读取结果页提前生成好的练习题。
 const loadPracticeSet = () => {
   const storedPracticeSet = appContext.getPracticeSet()
 
@@ -117,6 +135,7 @@ const loadPracticeSet = () => {
   errorMessage.value = '暂无练习题，请先完成简历分析'
 }
 
+// 记录用户选择的 Markdown 文件，生成前再做类型和大小校验。
 const handleMdFileChange = (event: Event) => {
   if (isGeneratingRagQuestions.value) {
     return
@@ -127,6 +146,7 @@ const handleMdFileChange = (event: Event) => {
   mdErrorMessage.value = ''
 }
 
+// 基于用户上传的 Markdown 资料重新生成一套 RAG 增强练习题。
 const handleGenerateWithMd = async () => {
   if (isGeneratingRagQuestions.value) {
     return
@@ -185,12 +205,14 @@ const handleNext = () => {
 }
 
 onMounted(() => {
+  // 首次进入练习页时恢复题集并关闭加载态。
   loadPracticeSet()
   isLoading.value = false
 })
 </script>
 
 <template>
+  <!-- 练习页主界面：无题集时提示回分析页，有题集时展示 RAG 上传区和当前题目。 -->
   <div class="min-h-screen bg-linear-to-b from-indigo-50/70 via-slate-50 to-white text-slate-900">
     <AppHeader action="reanalyze" />
 
@@ -223,8 +245,10 @@ onMounted(() => {
       </section>
 
       <template v-else-if="practiceSet && currentQuestion">
+        <!-- 题集概览：显示岗位方向和弱项标签。 -->
         <PracticeHeader :role-type="practiceSet.roleType" :weak-skills="practiceSet.weakSkills" />
 
+        <!-- 资料增强区：上传 Markdown 后，后端会检索相关片段并重新生成题目。 -->
         <section class="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -283,6 +307,7 @@ onMounted(() => {
           </button>
         </section>
 
+        <!-- RAG 生成中的占位态，避免旧题目和新请求状态混在一起。 -->
         <section
           v-if="isGeneratingRagQuestions"
           class="min-h-[320px] rounded-3xl bg-white p-6 shadow-sm ring-1 ring-indigo-100 sm:p-8"
@@ -309,6 +334,7 @@ onMounted(() => {
           </div>
         </section>
 
+        <!-- 当前题目卡：展示题干、考察意图和答题提示。 -->
         <PracticeQuestionCard
           v-else
           :key="questionRenderKey"
@@ -316,6 +342,7 @@ onMounted(() => {
           :disabled="isGeneratingRagQuestions"
         />
 
+        <!-- 题目翻页区。 -->
         <PracticeNavigation
           :current-index="currentIndex"
           :total="practiceSet.questions.length"

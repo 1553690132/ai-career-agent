@@ -10,18 +10,21 @@ import type {
   ResumeSuggestion,
 } from '../../types/analysis'
 import type { ResumeReviewScoreSummary } from './resumeReviewScoreChain'
-
+// 无JD下的评分链。
+// 无 JD 简历体检建议输入：基于简历画像和体检评分摘要生成建议。
 export interface ResumeReviewAdviceChainInput {
   resumeJson: ResumeProfile
   roleType: string
   scoreSummary: ResumeReviewScoreSummary
 }
 
+// 体检建议输出结构与 analysis_advice 保持一致，方便结果页复用组件。
 export type ResumeReviewAdviceChainOutput = Pick<
   AnalysisResult,
   'resumeSuggestions' | 'interviewQuestions'
 >
 
+// 给 workflow 合并结果时使用的体检建议摘要类型。
 export interface ResumeReviewAdviceSummary {
   resumeSuggestions: ResumeSuggestion[]
   interviewQuestions: InterviewQuestion[]
@@ -35,9 +38,11 @@ const delay = (milliseconds: number) =>
     setTimeout(resolve, milliseconds)
   })
 
+
 const isStructuredOutputError = (error: unknown) =>
   error instanceof AiJsonParseError || error instanceof SchemaValidationError
 
+// 压缩简历画像，保留生成建议需要的摘要、技能和项目。
 const createResumeReviewInput = (input: ResumeReviewAdviceChainInput) => ({
   resume: {
     summary: input.resumeJson.summary ?? '',
@@ -53,6 +58,7 @@ const createResumeReviewInput = (input: ResumeReviewAdviceChainInput) => ({
   },
 })
 
+// 压缩评分摘要，让建议 chain 聚焦最重要的优势、gap 和技能匹配。
 const createScoreSummary = (scoreSummary: ResumeReviewScoreSummary) => ({
   overallScore: scoreSummary.overallScore,
   overallSummary: scoreSummary.overallSummary,
@@ -71,9 +77,11 @@ const createScoreSummary = (scoreSummary: ResumeReviewScoreSummary) => ({
   })),
 })
 
+// 简历体检建议 chain：没有 JD 时给出通用优化建议和面试准备题。
 export const resumeReviewAdviceChain = {
   async invoke(input: ResumeReviewAdviceChainInput): Promise<ResumeReviewAdviceChainOutput> {
     console.log('[Chain] resume_review_advice start')
+    // 将简历上下文和评分摘要分开序列化，便于 prompt 清楚区分输入来源。
     const reviewInputText = JSON.stringify(createResumeReviewInput(input))
     const scoreSummaryText = JSON.stringify(createScoreSummary(input.scoreSummary))
     const prompt = createResumeReviewAdvicePrompt(
@@ -95,6 +103,7 @@ export const resumeReviewAdviceChain = {
         })
         outputLength = content.length
         errorStage = 'parse'
+        // 复用分析建议 schema，保证结果页能用同一套组件展示。
         const adviceJson = parseAiJsonResponse<ResumeReviewAdviceChainOutput>(content)
         errorStage = 'validate'
         validateAnalysisAdviceResult(adviceJson)

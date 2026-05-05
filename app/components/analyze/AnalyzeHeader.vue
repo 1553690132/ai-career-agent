@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 旧版/独立分析页头部：包含品牌导航和岗位类型选择器。
 type RoleType = 'frontend' | 'backend' | 'product' | 'algorithm'
 
 interface RoleTypeOption {
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   'update:roleType': [value: RoleType]
 }>()
 
+// 把 select 的值同步回父组件，用于切换分析岗位方向。
 const handleRoleChange = (event: Event) => {
   const target = event.target as HTMLSelectElement
   emit('update:roleType', target.value as RoleType)
@@ -23,6 +25,7 @@ const handleRoleChange = (event: Event) => {
 </script>
 
 <template>
+  <!-- 分析页页头：左侧导航，右侧岗位选择。 -->
   <header class="border-b border-indigo-100 bg-white/80 backdrop-blur">
     <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
       <div class="flex items-center gap-8">

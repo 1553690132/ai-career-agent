@@ -1,3 +1,6 @@
+// 切割各个区块的文本.
+
+// 简历按常见内容拆成几个区块，便于后续按区块压缩。
 export type ResumeSections = {
   basicInfo: string
   education: string
@@ -31,6 +34,7 @@ const createEmptySections = (): ResumeSections => ({
   others: '',
 })
 
+// 各区块标题的别名表：支持中文标题和英文标题。
 const sectionAliasMap: Record<SectionAliasKey, string[]> = {
   education: ['教育经历', '教育背景', '学历背景', '学习经历', '教育信息', 'education'],
   skills: ['相关技能', '专业技能', '技能', '技能清单', '技能特长', '技术栈', '个人技能', 'skills'],
@@ -41,6 +45,7 @@ const sectionAliasMap: Record<SectionAliasKey, string[]> = {
   selfEvaluation: ['自我评价', '个人评价', '自我介绍', '个人总结', '个人优势', 'summary', 'about', 'profile'],
 }
 
+// 基本信息之后可能出现的key
 const basicInfoBoundaryKeys: HeadingMatch['key'][] = [
   'education',
   'skills',
@@ -48,6 +53,7 @@ const basicInfoBoundaryKeys: HeadingMatch['key'][] = [
   'projects',
 ]
 
+// 清理标题前后的编号、括号、标点等装饰。
 const cleanHeadingText = (line: string) =>
   line
     .trim()
@@ -55,18 +61,20 @@ const cleanHeadingText = (line: string) =>
     .replace(/[】\]\)）:\：\s]+$/, '')
     .trim()
 
+// 标题归一化后再比较，降低空格和大小写对匹配的影响。
 const normalizeHeadingText = (line: string) =>
   cleanHeadingText(line).replace(/\s+/g, '').toLowerCase()
 
+// 判断单行文本是否是简历区块标题。
 export const matchSection = (line: string): keyof ResumeSections | null => {
   const trimmedLine = line.trim()
-
+  // 太长行不是标题
   if (!trimmedLine || trimmedLine.length > 24) {
     return null
   }
 
   const headingText = normalizeHeadingText(trimmedLine)
-
+  // 匹配别名表
   for (const [sectionKey, aliases] of Object.entries(sectionAliasMap)) {
     if (aliases.some((alias) => headingText === normalizeHeadingText(alias))) {
       return sectionKey as SectionAliasKey
@@ -76,6 +84,7 @@ export const matchSection = (line: string): keyof ResumeSections | null => {
   return null
 }
 
+// 只返回可作为边界的正文区块标题。
 const detectHeadingKey = (line: string): HeadingMatch['key'] | undefined => {
   const sectionKey = matchSection(line)
 
@@ -86,6 +95,7 @@ const detectHeadingKey = (line: string): HeadingMatch['key'] | undefined => {
   return sectionKey
 }
 
+// 清理行数组，去空后用换行拼回区块正文。
 const compactText = (lines: string[]) =>
   lines
     .map((line) => line.trim())
@@ -93,6 +103,7 @@ const compactText = (lines: string[]) =>
     .join('\n')
     .trim()
 
+// 根据标题位置把原始简历文本切成结构化区块。
 export const extractResumeSections = (rawText: string): ResumeSections => {
   const text = rawText.trim()
   const sections = createEmptySections()
@@ -104,6 +115,7 @@ export const extractResumeSections = (rawText: string): ResumeSections => {
   const lines = text.split(/\r?\n/)
   const headings: HeadingMatch[] = []
 
+  // 第一遍扫描所有可识别标题，记录标题所在行。
   lines.forEach((line, lineIndex) => {
     const key = detectHeadingKey(line)
 
@@ -112,6 +124,7 @@ export const extractResumeSections = (rawText: string): ResumeSections => {
     }
   })
 
+  // 没有识别到标题时，把全文放进 others，防止没有标题的简历异常。
   if (headings.length === 0) {
     return {
       ...sections,
@@ -119,6 +132,7 @@ export const extractResumeSections = (rawText: string): ResumeSections => {
     }
   }
 
+  // 基本信息通常出现在第一个主要区块之前，基本信息通常没有标题不能简单判断
   const basicInfoBoundary = headings.find((heading) =>
     basicInfoBoundaryKeys.includes(heading.key),
   )
@@ -127,6 +141,7 @@ export const extractResumeSections = (rawText: string): ResumeSections => {
     sections.basicInfo = compactText(lines.slice(0, basicInfoBoundary.lineIndex))
   }
 
+  // 每个标题到下一个标题之间的内容就是该区块正文。
   headings.forEach((heading, headingIndex) => {
     const nextHeading = headings[headingIndex + 1]
     const contentLines = lines.slice(
@@ -161,22 +176,23 @@ const compactSectionLabels: Array<{
   { key: 'selfEvaluation', label: '自我评价' },
 ]
 
-export const buildCompactResumeText = (sections: ResumeSections): string => {
-  const compactSections = compactSectionLabels
-    .map(({ key, label }) => {
-      const content = sections[key].trim()
+// 将区块重新拼成带标题的紧凑文本，供简历抽取 prompt 使用。
+// export const buildCompactResumeText = (sections: ResumeSections): string => {
+//   const compactSections = compactSectionLabels
+//     .map(({ key, label }) => {
+//       const content = sections[key].trim()
 
-      if (!content) {
-        return ''
-      }
+//       if (!content) {
+//         return ''
+//       }
 
-      return `【${label}】\n${content}`
-    })
-    .filter(Boolean)
+//       return `【${label}】\n${content}`
+//     })
+//     .filter(Boolean)
 
-  if (compactSections.length === 0 && sections.others.trim()) {
-    return sections.others.trim()
-  }
+//   if (compactSections.length === 0 && sections.others.trim()) {
+//     return sections.others.trim()
+//   }
 
-  return compactSections.join('\n\n')
-}
+//   return compactSections.join('\n\n')
+// }

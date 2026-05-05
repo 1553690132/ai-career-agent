@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 单题练习卡片：展示题目、技能、难度，并支持展开考察意图和答题提示。
 import type { PracticeQuestion } from '../../../types/analysis'
 
 const props = defineProps<{
@@ -9,6 +10,7 @@ const props = defineProps<{
 const showIntent = ref(false)
 const showTips = ref(false)
 
+// 切换到新题时收起上一题展开的辅助信息，避免状态串题。
 watch(
   () => props.question.id,
   () => {
@@ -17,6 +19,7 @@ watch(
   },
 )
 
+// 根据题目难度切换标签颜色。
 const difficultyClass = computed(() => {
   if (props.question.difficulty === 'easy') {
     return 'bg-emerald-50 text-emerald-700 ring-emerald-100'
@@ -31,6 +34,7 @@ const difficultyClass = computed(() => {
 </script>
 
 <template>
+  <!-- 当前题目主体：题干在上，解析和提示通过按钮渐进展开。 -->
   <article class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-indigo-100 sm:p-8">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">

@@ -1,4 +1,5 @@
 export class SchemaValidationError extends Error {
+  // 运行时结构校验失败时使用的统一错误类型。
   constructor(message: string) {
     super(`Schema validation failed: ${message}`)
   }
@@ -54,14 +55,15 @@ const assertObjectArrayField = (
   return value
 }
 
+// 校验简历抽取结果，保证后续分析链拿到稳定的 resume 结构。
 export const validateResumeJson = (data: unknown): void => {
-  const resume = assertRecord(data, 'resume')
-
-  ;['name', 'headline', 'summary', 'seniorityLevel'].forEach((field) => {
+  const resume = assertRecord(data, 'resume');
+  ['name', 'headline', 'summary', 'seniorityLevel'].forEach((field) => {
     assertStringField(resume, field)
   })
-  assertNumberField(resume, 'yearsOfExperience')
-  ;['targetRoles', 'skills', 'education'].forEach((field) => {
+  
+  assertNumberField(resume, 'yearsOfExperience');
+  ['targetRoles', 'skills', 'education'].forEach((field) => {
     assertStringArrayField(resume, field)
   })
 
@@ -72,27 +74,28 @@ export const validateResumeJson = (data: unknown): void => {
   })
 }
 
+// 校验 JD 抽取结果，确保岗位要求字段可被匹配分析链直接消费。
 export const validateJobJson = (data: unknown): void => {
   const job = assertRecord(data, 'job')
 
-  ;['title', 'company', 'summary', 'seniorityLevel'].forEach((field) => {
-    assertStringField(job, field)
-  })
+    ;['title', 'company', 'summary', 'seniorityLevel'].forEach((field) => {
+      assertStringField(job, field)
+    })
   assertNumberField(job, 'requiredYearsOfExperience')
-  ;['responsibilities', 'requiredSkills', 'preferredSkills', 'educationRequirements', 'keywords'].forEach(
-    (field) => {
-      assertStringArrayField(job, field)
-    },
-  )
+    ;['responsibilities', 'requiredSkills', 'preferredSkills', 'educationRequirements', 'keywords'].forEach(
+      (field) => {
+        assertStringArrayField(job, field)
+      },
+    )
 }
 
 export const validateAnalysisResult = (data: unknown): void => {
   const analysis = assertRecord(data, 'analysis')
 
   assertNumberField(analysis, 'overallScore')
-  ;['overallSummary', 'recommendation'].forEach((field) => {
-    assertStringField(analysis, field)
-  })
+    ;['overallSummary', 'recommendation'].forEach((field) => {
+      assertStringField(analysis, field)
+    })
   if (analysis.generatedAt !== undefined) {
     assertStringField(analysis, 'generatedAt')
   }
@@ -138,13 +141,14 @@ export const validateAnalysisResult = (data: unknown): void => {
   })
 }
 
+// 校验拆分后的评分链结果，不要求包含简历建议和面试题。
 export const validateAnalysisScoreResult = (data: unknown): void => {
   const analysis = assertRecord(data, 'analysisScore')
 
   assertNumberField(analysis, 'overallScore')
-  ;['overallSummary', 'recommendation'].forEach((field) => {
-    assertStringField(analysis, field)
-  })
+    ;['overallSummary', 'recommendation'].forEach((field) => {
+      assertStringField(analysis, field)
+    })
   assertStringArrayField(analysis, 'strengths')
 
   assertObjectArrayField(analysis, 'scoreCards').forEach((item, index) => {
@@ -168,6 +172,7 @@ export const validateAnalysisScoreResult = (data: unknown): void => {
   })
 }
 
+// 校验拆分后的建议链结果，只关注简历建议与面试问题数组。
 export const validateAnalysisAdviceResult = (data: unknown): void => {
   const advice = assertRecord(data, 'analysisAdvice')
 
@@ -191,6 +196,7 @@ export const validateAnalysisAdviceResult = (data: unknown): void => {
   })
 }
 
+// 校验练习题生成结果，保证前端 practice 页面可以安全渲染题目列表。
 export const validatePracticeSet = (data: unknown): void => {
   const practiceSet = assertRecord(data, 'practiceSet')
 

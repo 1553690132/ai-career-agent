@@ -1,5 +1,7 @@
 import type { JobProfile, ResumeProfile } from '../../types/analysis'
 
+// 将完整简历画像和岗位画像压缩成分析 prompt 所需的最小上下文。
+// 这样可以降低 token 占用，并减少无关字段对模型判断的干扰。
 export const createCompactAnalysisInput = (resume: ResumeProfile, job: JobProfile) => ({
   resume: {
     summary: resume.summary ?? '',

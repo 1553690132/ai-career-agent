@@ -1,10 +1,12 @@
 <script setup lang="ts">
+// 面试题紧凑区：在结果页侧栏展示 AI 预测的问题和考察意图。
 import type { InterviewQuestion } from '../../../types/analysis'
 
 defineProps<{
   interviewQuestions: InterviewQuestion[]
 }>()
 
+// 不同难度使用不同标签颜色，便于扫读。
 const difficultyClassMap: Record<InterviewQuestion['difficulty'], string> = {
   easy: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
   medium: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
@@ -13,6 +15,7 @@ const difficultyClassMap: Record<InterviewQuestion['difficulty'], string> = {
 </script>
 
 <template>
+  <!-- 结果页中的面试题预览列表。 -->
   <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
     <h2 class="text-xl font-semibold tracking-tight text-slate-950">
       面试问题

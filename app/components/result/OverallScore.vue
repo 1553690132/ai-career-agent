@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 总分卡片：展示整体匹配分、推荐结论和一段总结。
 import type { AnalysisResult } from '../../../types/analysis'
 
 const props = defineProps<{
@@ -7,6 +8,7 @@ const props = defineProps<{
   recommendation: AnalysisResult['recommendation']
 }>()
 
+// 将后端枚举值转成用户可读的推荐文案和样式。
 const recommendationLabel: Record<AnalysisResult['recommendation'], string> = {
   highly_recommended: '高度推荐',
   recommended: '推荐',
@@ -23,6 +25,7 @@ const recommendationClass: Record<AnalysisResult['recommendation'], string> = {
 </script>
 
 <template>
+  <!-- 总分和推荐结论通常作为报告首屏重点信息。 -->
   <section class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
     <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
       <div class="flex items-end gap-3">

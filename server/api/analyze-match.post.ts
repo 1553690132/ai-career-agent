@@ -14,12 +14,14 @@ import {
 import { SchemaValidationError } from '../utils/schemaValidation'
 import type { AnalysisResult, JobProfile, ResumeProfile } from '../../types/analysis'
 
+// 单独的匹配分析接口：接收已经结构化的 resumeJson/jobJson，直接调用 analysis_match。
 interface AnalyzeMatchRequestBody {
   resumeJson?: unknown
   jobJson?: unknown
   roleType?: string
 }
 
+// 将分析失败映射到 metrics 错误阶段，便于观察是 LLM、解析还是 schema 问题。
 const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
   if (!(error instanceof AiWorkflowStepError)) {
     return undefined
@@ -36,12 +38,14 @@ const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
   return 'llm'
 }
 
+// 分段工作流的第三步：根据简历画像和岗位画像生成匹配报告。
 export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const body = await readBody<AnalyzeMatchRequestBody>(event)
   const errors: string[] = []
 
   const roleType = body.roleType?.trim() ?? ''
 
+  // resumeJson/jobJson 可以是对象，也可以是 JSON 字符串，由 parseJsonInput 统一处理。
   if (body.resumeJson === undefined || body.resumeJson === null) {
     errors.push('resumeJson is required')
   }
@@ -63,11 +67,13 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   }
 
   try {
+    // 将未知输入转换为强类型画像，再调用匹配分析 chain。
     const resume = parseJsonInput<ResumeProfile>(body.resumeJson)
     const job = parseJsonInput<JobProfile>(body.jobJson)
 
     return await analyzeMatch(resume, job, roleType)
   } catch (error: unknown) {
+    // 匹配分析失败时保持与主分析接口一致：记录 metrics 并返回 mock 报告兜底。
     if (error instanceof AiWorkflowStepError && error.sourceError instanceof AiJsonParseError) {
       console.warn('[ai_workflow] fallback used after analysis_match JSON failure', {
         step: error.step,

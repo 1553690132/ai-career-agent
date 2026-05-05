@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+// 分析页：收集简历、JD 和目标岗位，提交给 /api/analyze 后把结果保存到 sessionStorage。
 import type { AnalysisResult } from '../../types/analysis'
 
 type RoleType = 'frontend' | 'backend' | 'product' | 'algorithm'
@@ -31,12 +32,15 @@ interface ApiErrorResponse {
 
 const minInputLength = 50
 
+// 简历输入状态
 const resumeText = ref('')
 const resumeFile = ref<File | null>(null)
 const resumeInputMode = ref<InputMode>('file')
+// JD 输入状态
 const jobText = ref('')
 const jobFile = ref<File | null>(null)
 const jobInputMode = ref<InputMode>('text')
+// 页面流程状态
 const roleType = ref<RoleType>('frontend')
 const isLoading = ref(false)
 const currentLoadingStep = ref(0)
@@ -45,6 +49,7 @@ const apiErrorMessage = ref('')
 const appContext = useAppContext()
 let loadingTimer: ReturnType<typeof setInterval> | undefined
 
+// 岗位类型
 const roleTypeOptions: Array<{ label: string; value: RoleType }> = [
   { label: '前端开发', value: 'frontend' },
   { label: '后端开发', value: 'backend' },
@@ -52,17 +57,16 @@ const roleTypeOptions: Array<{ label: string; value: RoleType }> = [
   { label: '算法工程师', value: 'algorithm' },
 ]
 
+// 校验简历上传内容
 const resumeError = computed(() => {
   if (resumeInputMode.value === 'file') {
     return resumeFile.value ? '' : '请上传简历文件'
   }
 
   const text = resumeText.value.trim()
-
   if (!text) {
     return '请输入简历文本'
   }
-
   if (text.length < minInputLength) {
     return `简历文本太短，请至少输入 ${minInputLength} 个字符`
   }
@@ -70,34 +74,34 @@ const resumeError = computed(() => {
   return ''
 })
 
+// JD 是可选项，只有用户输入了 JD 文本时才校验长度。
 const jobTextError = computed(() => {
   if (jobInputMode.value === 'file') {
     return ''
   }
 
   const text = jobText.value.trim()
-
   if (!text) {
     return ''
   }
-
   if (text.length < minInputLength) {
     return `岗位 JD 太短，请至少输入 ${minInputLength} 个字符`
   }
 
   return ''
 })
+
 const canSubmit = computed(
   () => !resumeError.value && !jobTextError.value && !isLoading.value,
 )
 
+// 统一化报错
 const getApiErrorMessage = (error: unknown) => {
   if (!error || typeof error !== 'object') {
     return '分析失败，请稍后重试'
   }
 
   const apiError = error as ApiErrorResponse
-
   if (apiError.data?.errors?.length) {
     return apiError.data.errors.join('；')
   }
@@ -105,6 +109,7 @@ const getApiErrorMessage = (error: unknown) => {
   return apiError.data?.message ?? apiError.statusMessage ?? apiError.message ?? '分析失败，请稍后重试'
 }
 
+// 记录简历与JD文件选择结果
 const handleResumeFileChange = (event: Event) => {
   const input = event.target as HTMLInputElement
   resumeFile.value = input.files?.[0] ?? null
@@ -115,9 +120,9 @@ const handleJobFileChange = (event: Event) => {
   jobFile.value = input.files?.[0] ?? null
 }
 
+// 将浏览器 File 转成 number[]，方便后端接收纯json
 const readResumeFileBytes = async (file: File) => {
   const arrayBuffer = await file.arrayBuffer()
-
   return Array.from(new Uint8Array(arrayBuffer))
 }
 
@@ -156,6 +161,7 @@ const createUploadPayload = async (file: File): Promise<UploadPayload> => ({
   bytes: await readResumeFileBytes(file),
 })
 
+
 const stopLoadingProgress = () => {
   if (loadingTimer) {
     clearInterval(loadingTimer)
@@ -163,6 +169,7 @@ const stopLoadingProgress = () => {
   }
 }
 
+// 定时器模拟当前工作流进程
 const startLoadingProgress = () => {
   stopLoadingProgress()
   currentLoadingStep.value = 0
@@ -211,6 +218,7 @@ const handleAnalyze = async () => {
       body: requestBody,
     })
 
+    // 分析结果保存在sessionStorage中，结果页通过 useAppContext 读取。
     appContext.saveAnalysisResult(result)
     appContext.saveSelectedRoleType(roleType.value)
     stopLoadingProgress()
@@ -230,19 +238,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-h-screen bg-[radial-gradient(circle_at_top,#eef2ff_0,#f8fafc_42%,#ffffff_100%)] text-slate-900">
-    <AppHeader
-      action="role"
-      :role-type="roleType"
-      :role-type-options="roleTypeOptions"
-      :disabled="isLoading"
-      @update:role-type="roleType = $event"
-    />
+    <AppHeader action="role" :role-type="roleType" :role-type-options="roleTypeOptions" :disabled="isLoading"
+      @update:role-type="roleType = $event" />
 
     <main class="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8">
-      <AnalyzeLoadingPanel
-        v-if="isLoading"
-        :current-step="currentLoadingStep"
-      />
+      <AnalyzeLoadingPanel v-if="isLoading" :current-step="currentLoadingStep" />
 
       <template v-else>
         <section class="mx-auto max-w-3xl text-center">
@@ -250,39 +250,24 @@ onBeforeUnmount(() => {
             AI Career Agent
           </p>
           <h1 class="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-            为你的求职，叠加胜算          </h1>
+            为你的求职，叠加胜算 </h1>
           <p class="mt-4 text-base leading-7 text-slate-600">
-            上传简历并提供目标岗位 JD，系统会分析匹配度、技能差距、简历优化方向和面试题预测。          </p>
+            上传简历并提供目标岗位 JD，系统会分析匹配度、技能差距、简历优化方向和面试题预测。 </p>
         </section>
 
+        <!-- 输入区：左侧简历必填，右侧 JD 可选。 -->
         <section class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <AnalyzeResumeUploadCard
-            v-model="resumeText"
-            v-model:mode="resumeInputMode"
-            :file="resumeFile"
-            :error="resumeError"
-            :show-error="hasSubmitted"
-            :disabled="isLoading"
-            @file-change="handleResumeFileChange"
-          />
+          <AnalyzeResumeUploadCard v-model="resumeText" v-model:mode="resumeInputMode" :file="resumeFile"
+            :error="resumeError" :show-error="hasSubmitted" :disabled="isLoading"
+            @file-change="handleResumeFileChange" />
 
-          <AnalyzeJobInputCard
-            v-model="jobText"
-            v-model:mode="jobInputMode"
-            :file="jobFile"
-            :error="jobTextError"
-            :show-error="hasSubmitted"
-            :disabled="isLoading"
-            @file-change="handleJobFileChange"
-          />
+          <AnalyzeJobInputCard v-model="jobText" v-model:mode="jobInputMode" :file="jobFile" :error="jobTextError"
+            :show-error="hasSubmitted" :disabled="isLoading" @file-change="handleJobFileChange" />
         </section>
 
-        <AnalyzeActionBar
-          :can-submit="canSubmit"
-          :is-loading="isLoading"
-          :error-message="apiErrorMessage"
-          @analyze="handleAnalyze"
-        />
+        <!-- 提交区：显示按钮状态和 API 错误。 -->
+        <AnalyzeActionBar :can-submit="canSubmit" :is-loading="isLoading" :error-message="apiErrorMessage"
+          @analyze="handleAnalyze" />
       </template>
     </main>
   </div>

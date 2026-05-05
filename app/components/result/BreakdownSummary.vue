@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 结果页详细拆解：同时展示评分卡和技能匹配明细，是报告中间的核心信息区。
 import type { ScoreCard, SkillMatch } from '../../../types/analysis'
 
 defineProps<{
@@ -6,6 +7,7 @@ defineProps<{
   skillMatches: SkillMatch[]
 }>()
 
+// 不同匹配等级对应不同颜色，方便用户快速识别强项和短板。
 const matchLevelClassMap: Record<SkillMatch['matchLevel'], string> = {
   strong: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
   partial: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
@@ -22,6 +24,7 @@ const matchLevelTextMap: Record<SkillMatch['matchLevel'], string> = {
 </script>
 
 <template>
+  <!-- 评分维度与技能匹配摘要，帮助用户从多个角度理解 overallScore。 -->
   <section class="self-start rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
     <div class="flex items-end justify-between gap-4">
       <div>

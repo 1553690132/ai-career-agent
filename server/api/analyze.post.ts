@@ -30,8 +30,11 @@ interface AnalyzeRequestBody {
   roleType?: string
 }
 
+// 限制 prompt 输入规模，避免浪费 token。
 const minTextLength = 50
 const maxTextLength = 2000
+
+// 辅助判断文件类型。
 const imageMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
 const pdfMimeTypes = ['application/pdf']
 const docxMimeTypes = [
@@ -39,48 +42,43 @@ const docxMimeTypes = [
 ]
 const txtMimeTypes = ['text/plain']
 
+// 将工作流异常映射成 metrics 中使用的错误阶段。
 const getFallbackErrorStage = (error: unknown): ChainErrorStage | undefined => {
   if (!(error instanceof AiWorkflowStepError)) {
     return undefined
   }
-
   if (error.sourceError instanceof AiJsonParseError) {
     return 'parse'
   }
-
   if (error.sourceError instanceof SchemaValidationError) {
     return 'validate'
   }
-
   return 'llm'
 }
 
+// 判断请求中是否真的包含上传文件字节。
 const hasUploadedFile = (file?: UploadedInputFile) =>
   Array.isArray(file?.bytes) && file.bytes.length > 0
 
 const resolveUploadedInputType = (file?: UploadedInputFile): UploadedInputType | undefined => {
   const mimeType = file?.mimeType?.trim().toLowerCase() ?? ''
   const fileName = file?.name?.trim().toLowerCase() ?? ''
-
   if (imageMimeTypes.includes(mimeType)) {
     return 'image'
   }
-
   if (pdfMimeTypes.includes(mimeType) || fileName.endsWith('.pdf')) {
     return 'pdf'
   }
-
   if (docxMimeTypes.includes(mimeType) || fileName.endsWith('.docx')) {
     return 'docx'
   }
-
   if (txtMimeTypes.includes(mimeType) || fileName.endsWith('.txt') || file?.type === 'txt') {
     return 'txt'
   }
-
   return file?.type
 }
 
+// 将 JSON 中的 number[] 封装成输入适配器需要的类 Buffer 对象。
 const createFileBuffer = (fileBytes: number[]) => ({
   byteLength: fileBytes.length,
   toString: () => new TextDecoder().decode(Uint8Array.from(fileBytes)),
@@ -88,6 +86,7 @@ const createFileBuffer = (fileBytes: number[]) => ({
   toArrayBuffer: () => Uint8Array.from(fileBytes).buffer,
 })
 
+// 把上传文件转换成通用输入类型。
 const createCommonInputFromFile = (
   file: UploadedInputFile,
   inputType: UploadedInputType,
@@ -109,6 +108,7 @@ const createCommonInputFromFile = (
   }
 }
 
+// 校验上传文件类型和图片MIME。
 const validateUploadedFile = (
   fileLabel: string,
   file: UploadedInputFile | undefined,
@@ -129,6 +129,7 @@ const validateUploadedFile = (
   }
 }
 
+// 主分析入口：解析输入 -> 规范化简历/JD -> 跑完整 AI 分析工作流。
 export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const body = await readBody<AnalyzeRequestBody>(event)
   const errors: string[] = []
@@ -141,6 +142,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   const jobFileType = resolveUploadedInputType(body.jobFile)
   const roleType = body.roleType?.trim() ?? ''
 
+  // 简历必须提供；可以是文本，也可以是上传文件。
   if (!resumeText && !hasResumeFile) {
     errors.push('resumeText is required')
   } else if (resumeText && resumeText.length < minTextLength) {
@@ -151,6 +153,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
 
   validateUploadedFile('resumeFile', body.resumeFile, resumeFileType, errors)
 
+  // JD 可选，但一旦提供文本就需要满足长度限制。
   if (jobText && jobText.length < minTextLength) {
     errors.push(`jobText must be at least ${minTextLength} characters`)
   } else if (jobText && jobText.length > maxTextLength) {
@@ -171,6 +174,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     })
   }
 
+  // 简历输入规范化
   const normalizedResume = await (async () => {
     try {
       if (hasResumeFile) {
@@ -192,6 +196,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
     }
   })()
 
+  // JD 输入规范化
   const normalizedJob = await (async () => {
     if (!jobText && !hasJobFile) {
       return undefined
@@ -218,6 +223,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
   })()
 
   try {
+    // 完整工作流会依次执行 resume extract、job extract、评分和建议生成。
     return await runFullAnalysis(normalizedResume.resumeText, normalizedJob?.jobText, roleType)
   } catch (error: unknown) {
     const failedStep = error instanceof AiWorkflowStepError ? error.step : 'unknown'
@@ -231,6 +237,7 @@ export default defineEventHandler(async (event): Promise<AnalysisResult> => {
       ),
     )
 
+    // AI 链路失败时返回 mock 报告，避免前端完全无结果。
     return {
       ...mockAnalysisResult,
       generatedAt: new Date().toISOString(),

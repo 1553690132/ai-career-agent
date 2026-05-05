@@ -12,13 +12,15 @@ import type {
   ScoreCard,
   SkillMatch,
 } from '../../types/analysis'
-
+// 评分chain，有JD下的情况。
+// analysis_score 的输入：已经归一化的简历画像、岗位画像和岗位类型。
 export interface AnalysisScoreChainInput {
   resumeJson: ResumeProfile
   jobJson: JobProfile
   roleType: string
 }
 
+// analysis_score 只负责分数、推荐结论、技能匹配、优势和差距。
 export type AnalysisScoreChainOutput = Pick<
   AnalysisResult,
   | 'overallScore'
@@ -30,6 +32,7 @@ export type AnalysisScoreChainOutput = Pick<
   | 'gaps'
 >
 
+// 给 advice chain 复用的评分摘要类型。
 export interface AnalysisScoreSummary {
   overallScore: number
   overallSummary: string
@@ -48,12 +51,15 @@ const delay = (milliseconds: number) =>
     setTimeout(resolve, milliseconds)
   })
 
+
 const isStructuredOutputError = (error: unknown) =>
   error instanceof AiJsonParseError || error instanceof SchemaValidationError
 
+// 匹配评分 chain：基于简历和 JD 输出可解释的评分结构。
 export const analysisScoreChain = {
   async invoke(input: AnalysisScoreChainInput): Promise<AnalysisScoreChainOutput> {
     console.log('[Chain] analysis_score start')
+    // 先压缩输入，避免把完整 profile 全量塞进 prompt。
     const analysisInput = createCompactAnalysisInput(input.resumeJson, input.jobJson)
     const analysisInputText = JSON.stringify(analysisInput)
     const prompt = createAnalysisScorePrompt(analysisInputText, input.roleType)
@@ -71,6 +77,7 @@ export const analysisScoreChain = {
         })
         outputLength = content.length
         errorStage = 'parse'
+        // 解析并校验输出，确保下游 advice chain 可以可靠消费 scoreSummary。
         const scoreJson = parseAiJsonResponse<AnalysisScoreChainOutput>(content)
         errorStage = 'validate'
         validateAnalysisScoreResult(scoreJson)

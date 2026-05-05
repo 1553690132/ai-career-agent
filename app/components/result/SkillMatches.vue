@@ -1,10 +1,12 @@
 <script setup lang="ts">
+// 技能匹配列表：对比简历证据和岗位要求，展示每项技能的匹配等级。
 import type { MatchLevel, SkillMatch } from '../../../types/analysis'
 
 const props = defineProps<{
   skillMatches: SkillMatch[]
 }>()
 
+// 将匹配等级枚举转为标签文案和状态色。
 const matchLevelLabel: Record<MatchLevel, string> = {
   strong: '强匹配',
   partial: '部分匹配',
@@ -21,6 +23,7 @@ const matchLevelClass: Record<MatchLevel, string> = {
 </script>
 
 <template>
+  <!-- 每条技能匹配包含候选人证据、岗位要求和匹配得分。 -->
   <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
     <h2 class="text-lg font-semibold text-slate-950">技能匹配</h2>
 

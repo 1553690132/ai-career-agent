@@ -10,12 +10,14 @@ import type {
   ScoreCard,
   SkillMatch,
 } from '../../types/analysis'
-
+// 无JD的评分chain。
+// 无 JD 简历体检评分输入：只依赖简历画像和用户选择的岗位方向。
 export interface ResumeReviewScoreChainInput {
   resumeJson: ResumeProfile
   roleType: string
 }
 
+// 体检评分输出结构与 analysis_score 保持一致，方便 workflow 统一合并。
 export type ResumeReviewScoreChainOutput = Pick<
   AnalysisResult,
   | 'overallScore'
@@ -27,6 +29,7 @@ export type ResumeReviewScoreChainOutput = Pick<
   | 'gaps'
 >
 
+// 给 resume_review_advice chain 复用的评分摘要类型。
 export interface ResumeReviewScoreSummary {
   overallScore: number
   overallSummary: string
@@ -48,6 +51,7 @@ const delay = (milliseconds: number) =>
 const isStructuredOutputError = (error: unknown) =>
   error instanceof AiJsonParseError || error instanceof SchemaValidationError
 
+// 将 ResumeProfile 压缩成体检 prompt 所需的关键上下文。
 const createResumeReviewInput = (resume: ResumeProfile) => ({
   summary: resume.summary ?? '',
   yearsOfExperience: resume.yearsOfExperience ?? 0,
@@ -66,9 +70,11 @@ const createResumeReviewInput = (resume: ResumeProfile) => ({
   })),
 })
 
+// 简历体检评分 chain：没有 JD 时评估简历完整度、表达和岗位方向匹配度。
 export const resumeReviewScoreChain = {
   async invoke(input: ResumeReviewScoreChainInput): Promise<ResumeReviewScoreChainOutput> {
     console.log('[Chain] resume_review_score start')
+    // 体检模式没有 jobJson，因此只压缩简历画像。
     const reviewInput = createResumeReviewInput(input.resumeJson)
     const reviewInputText = JSON.stringify(reviewInput)
     const prompt = createResumeReviewScorePrompt(reviewInputText, input.roleType)
@@ -80,12 +86,14 @@ export const resumeReviewScoreChain = {
       let errorStage: ChainErrorStage = 'llm'
 
       try {
+        // 使用低温度提升结构化评分结果稳定性。
         const content = await callWithLangChain(prompt, {
           temperature: 0,
           maxTokens: 1200,
         })
         outputLength = content.length
         errorStage = 'parse'
+        // 复用分析评分 schema，保证结果页能用同一套组件展示。
         const scoreJson = parseAiJsonResponse<ResumeReviewScoreChainOutput>(content)
         errorStage = 'validate'
         validateAnalysisScoreResult(scoreJson)

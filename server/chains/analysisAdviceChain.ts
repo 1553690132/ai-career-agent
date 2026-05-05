@@ -12,7 +12,8 @@ import type {
   ResumeSuggestion,
 } from '../../types/analysis'
 import type { AnalysisScoreSummary } from './analysisScoreChain'
-
+// 有JD下的评分链。
+// analysis_advice 的输入：评分结果会作为上下文，帮助建议更贴合差距。
 export interface AnalysisAdviceChainInput {
   resumeJson: ResumeProfile
   jobJson: JobProfile
@@ -20,27 +21,33 @@ export interface AnalysisAdviceChainInput {
   scoreSummary: AnalysisScoreSummary
 }
 
+// analysis_advice 只负责产出简历建议和面试题，不重复生成评分。
 export type AnalysisAdviceChainOutput = Pick<
   AnalysisResult,
   'resumeSuggestions' | 'interviewQuestions'
 >
 
+// 给 workflow 合并结果时使用的建议摘要类型。
 export interface AnalysisAdviceSummary {
   resumeSuggestions: ResumeSuggestion[]
   interviewQuestions: InterviewQuestion[]
 }
 
+
 const maxStructuredRetries = 1
 const structuredRetryDelay = 500
+
 
 const delay = (milliseconds: number) =>
   new Promise((resolve) => {
     setTimeout(resolve, milliseconds)
   })
 
+
 const isStructuredOutputError = (error: unknown) =>
   error instanceof AiJsonParseError || error instanceof SchemaValidationError
 
+// 组合简历/JD 压缩上下文和评分摘要，作为建议生成的 prompt 输入。
 const createAdviceInput = (input: AnalysisAdviceChainInput) => ({
   ...createCompactAnalysisInput(input.resumeJson, input.jobJson),
   scoreSummary: {
@@ -62,9 +69,11 @@ const createAdviceInput = (input: AnalysisAdviceChainInput) => ({
   },
 })
 
+// 匹配建议 chain：在评分基础上生成简历优化建议和面试题预测。
 export const analysisAdviceChain = {
   async invoke(input: AnalysisAdviceChainInput): Promise<AnalysisAdviceChainOutput> {
     console.log('[Chain] analysis_advice start')
+    // advice 输入包含压缩画像和关键评分结论，减少模型重复推理。
     const adviceInput = createAdviceInput(input)
     const adviceInputText = JSON.stringify(adviceInput)
     const prompt = createAnalysisAdvicePrompt(adviceInputText, input.roleType)
@@ -82,6 +91,7 @@ export const analysisAdviceChain = {
         })
         outputLength = content.length
         errorStage = 'parse'
+        // 解析并校验输出，保证结果页可以直接渲染建议和面试题。
         const adviceJson = parseAiJsonResponse<AnalysisAdviceChainOutput>(content)
         errorStage = 'validate'
         validateAnalysisAdviceResult(adviceJson)

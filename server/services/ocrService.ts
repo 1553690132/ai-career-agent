@@ -1,5 +1,6 @@
 import { createWorker } from 'tesseract.js'
 
+// OCR 的安全限制和文本长度限制。
 const supportedImageMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
 const maxImageSize = 3 * 1024 * 1024
 const maxOcrTextLength = 2000
@@ -10,7 +11,10 @@ type Buffer = {
   toUint8Array: () => Uint8Array
 }
 
+// Tesseract worker 复用。
 let workerPromise: ReturnType<typeof createWorker> | null = null
+
+// 并发保护，防止多个worker导致状态混乱。
 let isOcrBusy = false
 
 const getWorker = () => {
@@ -24,6 +28,7 @@ const getWorker = () => {
   return workerPromise
 }
 
+// OCR 输出清洗：保留中文、英文、数字和空白，去掉噪声符号。
 export const cleanText = (text: string) =>
   text
     .replace(/[^\p{Script=Han}A-Za-z0-9\s]/gu, ' ')
@@ -36,6 +41,7 @@ export const cleanText = (text: string) =>
     .trim()
     .slice(0, maxOcrTextLength)
 
+// 从图片简历中识别文本，并做格式、大小和最小文本长度校验。
 export const extractTextFromImage = async (
   fileBuffer: Buffer,
   mimeType: string,
@@ -43,6 +49,7 @@ export const extractTextFromImage = async (
   console.log('[input] OCR start')
 
   try {
+    // 并发保护
     if (isOcrBusy) {
       throw new Error('OCR busy')
     }
@@ -57,6 +64,7 @@ export const extractTextFromImage = async (
       throw new Error('Image resume input must be at most 3MB')
     }
 
+    // Tesseract 接收 Uint8Array 数据
     const worker = await getWorker()
     const imageData = fileBuffer.toUint8Array() as unknown as Parameters<typeof worker.recognize>[0]
     const result = await worker.recognize(imageData)

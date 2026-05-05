@@ -2,7 +2,8 @@ import { Document } from '@langchain/core/documents'
 import type { EmbeddingsInterface } from '@langchain/core/embeddings'
 import { Chroma } from '@langchain/community/vectorstores/chroma'
 import { MemoryVectorStore } from '@langchain/classic/vectorstores/memory'
-
+// 向量库处理.
+// 向量库 provider：memory 适合本地开发，chroma 适合持久化和多次复用。
 type VectorStoreProvider = 'memory' | 'chroma'
 
 interface VectorStoreRuntimeConfig {
@@ -22,6 +23,7 @@ interface RagVectorStore {
   similaritySearch(query: string, topK: number): Promise<Document[]>
 }
 
+// 默认走内存向量库。
 const normalizeProvider = (provider?: string): VectorStoreProvider => {
   if (provider === 'chroma' || provider === 'memory') {
     return provider
@@ -38,6 +40,7 @@ const getErrorMessage = (error: unknown) => {
   return String(error)
 }
 
+// Chroma collection 维度和当前 embedding 维度不一致时的错误。
 const isDimensionMismatchError = (error: unknown) => {
   const message = getErrorMessage(error).toLowerCase()
 
@@ -46,6 +49,7 @@ const isDimensionMismatchError = (error: unknown) => {
     || (message.includes('expect') && message.includes('got'))
 }
 
+// 对维度不匹配给出更明确的处理提示。
 const logDimensionMismatch = (error: unknown) => {
   if (isDimensionMismatchError(error)) {
     console.warn(
@@ -54,6 +58,7 @@ const logDimensionMismatch = (error: unknown) => {
   }
 }
 
+// 创建内存向量库，并在查询时按 documentId/source 做元数据过滤。
 const createMemoryVectorStore = async (
   docs: Document[],
   embeddings: EmbeddingsInterface,
@@ -63,6 +68,7 @@ const createMemoryVectorStore = async (
 
   return {
     similaritySearch(query: string, topK: number) {
+      // similaritySearch 可以限制搜索范围
       return store.similaritySearch(
         query,
         topK,
@@ -82,6 +88,7 @@ const createMemoryVectorStore = async (
   }
 }
 
+// Chroma similaritySearch 使用的 metadata filter。
 const createMetadataFilter = (options: CreateVectorStoreOptions): Record<string, string> | undefined => {
   if (options.documentId) {
     return {
@@ -98,6 +105,7 @@ const createMetadataFilter = (options: CreateVectorStoreOptions): Record<string,
   return undefined
 }
 
+// 从文档集合中提取唯一 documentId，避免重复写入同一个文档。
 const getUniqueDocumentIds = (docs: Document[]) =>
   Array.from(
     new Set(
@@ -107,6 +115,7 @@ const getUniqueDocumentIds = (docs: Document[]) =>
     ),
   )
 
+// 创建或复用 Chroma collection；已有文档不会重复 add。
 const createChromaVectorStore = async (
   docs: Document[],
   embeddings: EmbeddingsInterface,
@@ -120,12 +129,13 @@ const createChromaVectorStore = async (
   const existingDocumentIds = new Set<string>()
   const documentIds = getUniqueDocumentIds(docs)
 
+  // 先探测文档是否已经入库，避免内置知识库反复索引。
   for (const documentId of documentIds) {
     try {
       const existingDocs = await store.similaritySearch('', 1, {
         documentId,
       })
-
+      // 记录入库id
       if (existingDocs.length > 0) {
         existingDocumentIds.add(documentId)
         const existingInputDoc = docs.find((doc) => doc.metadata.documentId === documentId)
@@ -138,9 +148,10 @@ const createChromaVectorStore = async (
       logDimensionMismatch(error)
     }
   }
-
+  // 只添加没入库的docs
   const docsToAdd = docs.filter((doc) => !existingDocumentIds.has(doc.metadata.documentId))
 
+  // 用 documentId-chunkIndex 作为稳定 id，便于同一文档多 chunk 存储。
   if (docsToAdd.length > 0) {
     const ids = docsToAdd.map((doc) => `${doc.metadata.documentId}-${doc.metadata.chunkIndex}`)
     await store.addDocuments(docsToAdd, { ids })
@@ -153,6 +164,7 @@ const createChromaVectorStore = async (
   }
 }
 
+// 根据 runtimeConfig 创建向量库；Chroma 失败时自动回退到 memory。
 export const createVectorStore = async (
   docs: Document[],
   embeddings: EmbeddingsInterface,

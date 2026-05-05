@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 练习页头部：展示当前练习方向和本轮针对的薄弱技能标签。
 defineProps<{
   roleType: string
   weakSkills: string[]
@@ -6,6 +7,7 @@ defineProps<{
 </script>
 
 <template>
+  <!-- 练习模式概览，帮助用户确认题目是围绕哪些弱项生成的。 -->
   <section class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-indigo-100 sm:p-8">
     <p class="text-sm font-semibold uppercase tracking-[0.22em] text-indigo-500">
       Practice Mode
